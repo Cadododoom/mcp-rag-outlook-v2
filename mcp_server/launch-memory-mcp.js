@@ -1,7 +1,7 @@
 const readline = require('readline');
 const http = require('http');
 
-const MILVUS_URL = 'http://localhost:19530';
+const MILVUS_URL = 'http://localhost:18080';
 const EMBEDDING_URL = 'http://localhost:8080/v1/embeddings';
 
 console.error('[Memory MCP] Starting Memory Manager MCP Server...');

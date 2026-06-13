@@ -9,7 +9,7 @@ from requests.adapters import HTTPAdapter
 
 BASE_DIR = r"C:\Users\jeffr\.gemini\antigravity\scratch\mcp-rag-outlook\scratch\synthetic_codebase"
 EMBEDDING_URL = "http://localhost:8080/v1/embeddings"
-MILVUS_URL = "http://localhost:19530"
+MILVUS_URL = "http://localhost:18080"
 CONV_ID = "rag-stress-test-conv"
 
 # Configure connection pooling for requests

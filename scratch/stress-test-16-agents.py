@@ -7,7 +7,7 @@ import requests
 
 VLLM_URL = "http://localhost:8000/v1/chat/completions"
 EMBEDDING_URL = "http://localhost:8080/v1/embeddings"
-MILVUS_URL = "http://localhost:19530"
+MILVUS_URL = "http://localhost:18080"
 CONV_ID = "rag-stress-test-conv"
 
 # 4 target secrets that were injected during ingestion
