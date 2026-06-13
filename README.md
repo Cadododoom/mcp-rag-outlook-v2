@@ -83,3 +83,31 @@ To activate one of the configurations:
 2.  Backup your existing configuration file.
 3.  Copy the contents of either `config/opencode_rag.json` or `config/opencode_virtual_ctx.json` to replace it.
 4.  Restart your OpenCode server or OpenChamber workspace in VS Code.
+
+---
+
+## Virtual Context (22K Cap) & Memory Loop Design
+
+### How the Context Loop Operates:
+1.  **Client-Side Truncation**: Both OpenCode (OpenChamber) and Hermes Agent support a sliding dialog window. When the active chat history exceeds the client's configured context length (which we set to `22000` tokens in the profile), the client automatically truncates the oldest messages in the array before prompting the LLM.
+2.  **Losing History**: Standard sliding windows cause the model to lose track of early decisions, configuration settings, or task milestones.
+3.  **The Memory Loop Solution**:
+    *   **Milestone Checkpoints**: As the agent performs tasks, it proactively calls the tool:
+        `store_chat_memory(conversationId, "Milestone summary", "Details of decisions/credentials")`
+    *   **Retrieval on Demand**: When the agent needs to verify past details (or when it realizes history has been truncated), it calls:
+        `retrieve_chat_memory(conversationId, "credentials or decisions setup")`
+    *   **VRAM Efficiency**: Since the retrieved snippet is extremely small (under 1K tokens), the agent can query 1M+ tokens of conversation history without inflating the active context beyond 22k tokens. This guarantees that **16 agents** can run simultaneously in GPU VRAM without causing swapping latency.
+
+---
+
+## Database Backups to Google Drive (G:)
+
+To protect your RAG memories and code indices from drive failures, we have provided an automated PowerShell script `backup-db.ps1` in the repository root.
+
+### How to Run Backups:
+1. Make sure your Google Drive desktop app is running and your Drive is mounted as `G:`.
+2. Run the script from PowerShell:
+   ```powershell
+   ./backup-db.ps1
+   ```
+The script uses `Robocopy` to mirror the `./volumes` directory incrementally, making it extremely fast and cloud-sync friendly.
