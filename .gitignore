@@ -1,3 +1,4 @@
 node_modules/
 volumes/
 mcp_server/.env
+models/

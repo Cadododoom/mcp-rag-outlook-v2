@@ -1,0 +1,124 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (Local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:1234/v1",
+        "apiKey": "lm-studio",
+        "extraBody": {
+          "n_ctx": 1000000,
+          "rope_scaling_type": "yarn",
+          "rope_factor": 4
+        }
+      },
+      "models": {
+        "qwen3.6-35b-a3b-mtp@iq3_xxs": {
+          "name": "Qwen 35B Local",
+          "max_tokens": 16384,
+          "context_length": 1000000,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "qwen3.6-35b-a3b-mtp@iq4_nl": {
+          "name": "Qwen 35B Local iQ4_NL",
+          "max_tokens": 16384,
+          "context_length": 1000000,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "qwen3.5-9b": {
+          "name": "qwen3.5-9b",
+          "max_tokens": 16384,
+          "context_length": 1000000,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "qwen3.6-27b-mtp@iq4_nl": {
+          "name": "Qwen 27B Local iQ4_NL",
+          "max_tokens": 16384,
+          "context_length": 1000000,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        }
+      }
+    },
+    "vllm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "vLLM 5060ti Stack (Virtual 22k Context)",
+      "options": {
+        "baseURL": "http://localhost:8000/v1",
+        "apiKey": "none",
+        "extraBody": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "min_p": 0.0,
+          "presence_penalty": 0.0,
+          "repetition_penalty": 1.0
+        }
+      },
+      "models": {
+        "nvidia/Qwen3.6-35B-A3B-NVFP4": {
+          "name": "Qwen 35B NVFP4 (Capped 22k)",
+          "max_tokens": 8192,
+          "context_length": 22000,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+  "mcp": {
+    "code-indexer": {
+      "type": "local",
+      "command": [
+        "node",
+        "C:/Users/jeffr/.gemini/antigravity/scratch/mcp-rag-outlook/mcp_server/launch-mcp.js"
+      ],
+      "enabled": true
+    }
+  }
+}

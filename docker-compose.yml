@@ -43,6 +43,25 @@ services:
       - minio
     restart: unless-stopped
 
+  llama-cpp-embedding:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: llama-cpp-embedding
+    volumes:
+      - ./models:/models
+    ports:
+      - "8080:8080"
+    command:
+      - "-m"
+      - "/models/nomic-embed-text-v1.5.Q8_0.gguf"
+      - "-c"
+      - "2048"
+      - "--port"
+      - "8080"
+      - "--host"
+      - "0.0.0.0"
+      - "--embedding"
+    restart: unless-stopped
+
 volumes:
   etcd:
   minio:

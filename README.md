@@ -39,24 +39,26 @@ To allow any single agent to scale up to the model's native limit of **262K toke
 
 ## Component Setup & Deployment
 
-### 1. Deploy Milvus standalone
-Ensure you have stopped any previous docker-conflict containers, then run:
-```powershell
-docker compose up -d
-```
-This deploys the standalone vector store stack:
-*   **milvus-standalone** (Port `19530`): Core vector indexing and search engine.
+### 1. Deploy the Stack (Milvus + Llama.cpp Embedding)
+1. Copy your `nomic-embed-text-v1.5.Q8_0.gguf` file to the local `./models/` directory.
+2. Ensure you have stopped any conflicting containers, then run:
+   ```powershell
+   docker compose up -d
+   ```
+This deploys the complete RAG and embedding infrastructure:
+*   **llama-cpp-embedding** (Port `8080`): Isolated embedding server running `llama.cpp`.
+*   **milvus-standalone** (Port `19530`): Standalone vector indexing and search database.
 *   **milvus-etcd** (Internal Port `2379`): Metadata storage.
-*   **milvus-minio** (Ports `9000` / `9001`): Object storage for vectors and indexes (with matched access keys).
+*   **milvus-minio** (Ports `9000` / `9001`): Object storage for vectors and indexes.
 
 ### 2. Configure the MCP Server Launcher
 The folder `mcp_server` contains a pre-configured Node.js launcher wrapper.
 1.  Verify the environment settings inside [mcp_server/.env](mcp_server/.env):
     ```env
     EMBEDDING_PROVIDER=OpenAI
-    OPENAI_BASE_URL=http://localhost:1234/v1
-    OPENAI_API_KEY=lm-studio
-    EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5@q8_0
+    OPENAI_BASE_URL=http://localhost:8080/v1
+    OPENAI_API_KEY=llama-cpp
+    EMBEDDING_MODEL=nomic-embed-text-v1.5.Q8_0
     MILVUS_ADDRESS=localhost:19530
     ```
 2.  Install launcher dependencies:
@@ -64,17 +66,20 @@ The folder `mcp_server` contains a pre-configured Node.js launcher wrapper.
     # Run in the mcp_server folder
     cmd.exe /c npm install
     ```
-3.  Run or register the launcher (`launch-mcp.js`). The script performs a port check to verify that Milvus is fully online before launching the AST indexer.
+3.  Run or register the launcher (`launch-mcp.js`). The script performs a port check to verify that Milvus is online before starting the AST indexer.
 
 ---
 
 ## Integration with OpenCode / OpenChamber
 
-We have provided a complete configuration profile in [config/opencode_rag.json](config/opencode_rag.json).
+We have provided two alternative configuration profiles in the `config/` directory:
 
-To activate it:
+1.  **Native 262k Profile** ([config/opencode_rag.json](config/opencode_rag.json)): Uses the full 262K native model context window. Recommended for single-agent deep analysis.
+2.  **Virtual Context 22k Profile** ([config/opencode_virtual_ctx.json](config/opencode_virtual_ctx.json)): Caps the physical context window at 22K to support up to 16 concurrent agents in VRAM. Recommended for running high-concurrency workflows alongside our RAG memory loop.
+
+To activate one of the configurations:
 1.  Locate your active OpenCode configuration file at:
     `%USERPROFILE%\.config\opencode\opencode.json`
 2.  Backup your existing configuration file.
-3.  Copy the contents of `config/opencode_rag.json` to replace it.
+3.  Copy the contents of either `config/opencode_rag.json` or `config/opencode_virtual_ctx.json` to replace it.
 4.  Restart your OpenCode server or OpenChamber workspace in VS Code.
