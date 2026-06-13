@@ -63,9 +63,38 @@ if (Test-Path $HermesConfig) {
     Write-Host "Saved Hermes Agent configuration profile." -ForegroundColor Green
 }
 
+# 5. Backup Hermes Agent AppData (databases, profiles, sessions, memories)
+Write-Host "`n[4/4] Backing up Hermes Agent active AppData (state, profiles, sessions)..." -ForegroundColor Cyan
+$HermesAppDir = "C:\Users\jeffr\AppData\Local\hermes"
+$HermesAppDest = "$BackupRoot\hermes_app_data"
+
+if (Test-Path $HermesAppDir) {
+    New-Item -ItemType Directory -Path $HermesAppDest -Force | Out-Null
+    
+    # Mirror active state/profile directories
+    $HermesFolders = @("profiles", "skills", "sessions", "memories", "state-snapshots")
+    foreach ($Folder in $HermesFolders) {
+        if (Test-Path "$HermesAppDir\$Folder") {
+            robocopy "$HermesAppDir\$Folder" "$HermesAppDest\$Folder" /MIR /MT:8 /FFT /R:3 /W:5 /NP /NDL /NFL
+        }
+    }
+    
+    # Copy database files and config parameters
+    $HermesFiles = @("state.db", "config.yaml", "auth.json", ".env", "SOUL.md")
+    foreach ($File in $HermesFiles) {
+        if (Test-Path "$HermesAppDir\$File") {
+            Copy-Item "$HermesAppDir\$File" "$HermesAppDest\$File" -Force
+        }
+    }
+    Write-Host "Hermes Agent active AppData backed up successfully." -ForegroundColor Green
+} else {
+    Write-Warning "Hermes AppData folder not found at $HermesAppDir."
+}
+
 # Copy the master restore script directly to the backup root so it is easily accessible on a fresh OS
 Copy-Item "$ScratchDir\mcp-rag-outlook\restore-workstation.ps1" "$BackupRoot\restore-workstation.ps1" -Force
 
 Write-Host "`n==========================================================" -ForegroundColor Green
 Write-Host "        MASTER WORKSTATION BACKUP COMPLETED SUCCESSFULLY!  " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
+

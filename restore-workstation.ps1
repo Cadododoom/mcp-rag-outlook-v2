@@ -73,6 +73,38 @@ if (Test-Path $HermesBackup) {
     Write-Host "Enforced Hermes Agent configuration profile." -ForegroundColor Green
 }
 
+# 4b. Restore Hermes Agent AppData (databases, profiles, sessions, memories)
+Write-Host "`nRestoring Hermes Agent active AppData (state, profiles, sessions)..." -ForegroundColor Cyan
+$HermesAppDir = "C:\Users\jeffr\AppData\Local\hermes"
+$HermesAppSource = "$BackupRoot\hermes_app_data"
+
+if (Test-Path $HermesAppSource) {
+    if (-not (Test-Path $HermesAppDir)) {
+        New-Item -ItemType Directory -Path $HermesAppDir -Force | Out-Null
+        Write-Host "Created missing local Hermes folder: $HermesAppDir" -ForegroundColor Yellow
+    }
+    
+    # Restore directories
+    $HermesFolders = @("profiles", "skills", "sessions", "memories", "state-snapshots")
+    foreach ($Folder in $HermesFolders) {
+        if (Test-Path "$HermesAppSource\$Folder") {
+            robocopy "$HermesAppSource\$Folder" "$HermesAppDir\$Folder" /MIR /MT:8 /FFT /R:3 /W:5 /NP /NDL /NFL
+        }
+    }
+    
+    # Restore database files and config parameters
+    $HermesFiles = @("state.db", "config.yaml", "auth.json", ".env", "SOUL.md")
+    foreach ($File in $HermesFiles) {
+        if (Test-Path "$HermesAppSource\$File") {
+            Copy-Item "$HermesAppSource\$File" "$HermesAppDir\$File" -Force
+        }
+    }
+    Write-Host "Hermes Agent active AppData restored successfully." -ForegroundColor Green
+} else {
+    Write-Warning "Hermes active AppData backup not found on G Drive."
+}
+
+
 # 5. Verify Embedding GGUF Model
 Write-Host "`n[4/7] Verifying embedding model GGUF file..." -ForegroundColor Cyan
 $ModelDest = "$ScratchDir\mcp-rag-outlook\models\nomic-embed-text-v1.5.Q8_0.gguf"
