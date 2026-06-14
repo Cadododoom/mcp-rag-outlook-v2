@@ -41,7 +41,7 @@ foreach ($Repo in $Repos) {
         
         # Configure Robocopy parameters with exclusions:
         # Excludes: node_modules, huggingface-cache, vllm-cache, hf-cache, local database volumes
-        $ExcludeDirs = @("node_modules", "huggingface-cache", "vllm-cache", "hf-cache", "volumes")
+        $ExcludeDirs = @("node_modules", "huggingface-cache", "vllm-cache", "hf-cache", "volumes", "venv", ".venv")
         
         robocopy $SourcePath $DestPath /MIR /MT:8 /FFT /R:3 /W:5 /NP /NDL /NFL /XD $ExcludeDirs
     } else {
