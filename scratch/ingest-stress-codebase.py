@@ -106,37 +106,52 @@ def parse_and_chunk_codebase():
     print(f"[Ingester] Total parsed code chunks: {len(chunks)}")
     return chunks
 
-def get_embedding_rest(text):
-    res = session.post(EMBEDDING_URL, json={"input": text}, timeout=10)
-    res.raise_for_status()
-    return res.json()["data"][0]["embedding"]
+def get_embeddings_batch(texts):
+    max_retries = 5
+    backoff = 0.5
+    for attempt in range(max_retries):
+        try:
+            res = session.post(EMBEDDING_URL, json={"input": texts}, timeout=60)
+            res.raise_for_status()
+            return [item["embedding"] for item in res.json()["data"]]
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            time.sleep(backoff * (2 ** attempt))
 
 def ingest_all_chunks(chunks):
-    print(f"[Ingester] Ingesting {len(chunks)} chunks into Milvus using 32 parallel threads...")
+    batch_size = 32
+    print(f"[Ingester] Ingesting {len(chunks)} chunks into Milvus in batches of {batch_size}...")
     
-    # We will compute embeddings in parallel
     start_time = time.time()
     embeddings = [None] * len(chunks)
     
-    def process_chunk(idx):
+    # Divide indices into batches
+    batches = [range(i, min(i + batch_size, len(chunks))) for i in range(0, len(chunks), batch_size)]
+    
+    def process_batch(batch_range):
         try:
-            summary = chunks[idx]["summary"]
-            details = chunks[idx]["details"]
-            # Embed the combination of summary and details
-            text_to_embed = f"{summary} - {details}"
-            vector = get_embedding_rest(text_to_embed)
-            embeddings[idx] = vector
+            batch_texts = []
+            for idx in batch_range:
+                summary = chunks[idx]["summary"]
+                details = chunks[idx]["details"]
+                batch_texts.append(f"{summary} - {details}")
+                
+            batch_vectors = get_embeddings_batch(batch_texts)
+            for i, idx in enumerate(batch_range):
+                embeddings[idx] = batch_vectors[i]
         except Exception as e:
-            print(f"Error embedding chunk {idx}: {e}")
+            print(f"Error embedding batch starting at {batch_range[0]}: {e}")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-        futures = {executor.submit(process_chunk, i): i for i in range(len(chunks))}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(process_batch, b): b for b in batches}
         completed = 0
         for future in concurrent.futures.as_completed(futures):
             completed += 1
-            if completed % 1000 == 0:
-                rate = completed / (time.time() - start_time)
-                print(f"  Embedded {completed}/{len(chunks)} chunks... ({rate:.1f} embeddings/sec)")
+            completed_chunks = completed * batch_size
+            if completed % 10 == 0 or completed_chunks >= len(chunks):
+                rate = min(completed_chunks, len(chunks)) / (time.time() - start_time)
+                print(f"  Embedded {min(completed_chunks, len(chunks))}/{len(chunks)} chunks... ({rate:.1f} embeddings/sec)")
                 
     embed_time = time.time() - start_time
     print(f"[Ingester] Computed {len(chunks)} embeddings in {embed_time:.2f} seconds.")

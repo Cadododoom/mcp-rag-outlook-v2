@@ -2,7 +2,7 @@
 # Run this on a fresh OS checkpoint to restore everything.
 
 $RepoDir = "C:/Users/jeffr/.gemini/antigravity/scratch/mcp-rag-outlook"
-$VllmDir = "C:/Users/jeffr/.gemini/antigravity/scratch/vLLM_5060TI"
+$VllmDir = "C:/Users/jeffr/.gemini/antigravity/scratch/SGlang_5060ti"
 
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "       AI WORKSTATION MASTER REBUILD & RESTORE STACK       " -ForegroundColor Green

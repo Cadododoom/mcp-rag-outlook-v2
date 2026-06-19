@@ -30,7 +30,7 @@ if (Test-Path $DbVolumes) {
 
 # 3. Backup Repositories (with exclusions)
 Write-Host "`n[2/3] Mirroring code repositories (excluding caches & node_modules)..." -ForegroundColor Cyan
-$Repos = @("mcp-rag-outlook", "vLLM_5060TI", "Qwen3-TTS-Stack", "vLLM-Container-Manager", "Hermes-Swarm-Director")
+$Repos = @("mcp-rag-outlook", "SGlang_5060ti", "Qwen3-TTS-Stack", "vLLM-Container-Manager", "Hermes-Swarm-Director")
 
 foreach ($Repo in $Repos) {
     $SourcePath = "$ScratchDir\$Repo"

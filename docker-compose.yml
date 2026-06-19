@@ -23,8 +23,8 @@ services:
     volumes:
       - ./volumes/minio:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     command: minio server /data --console-address ":9001"
     restart: unless-stopped
     deploy:
@@ -37,8 +37,8 @@ services:
     image: milvusdb/milvus:v2.4.13
     container_name: milvus-standalone
     ports:
-      - "19530:19530"
-      - "18080:18080"
+      - "127.0.0.1:19530:19530"
+      - "127.0.0.1:18080:18080"
     environment:
       - ETCD_ENDPOINTS=etcd:2379
       - MINIO_ADDRESS=minio:9000
@@ -63,7 +63,7 @@ services:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
     container_name: kokoro-tts
     ports:
-      - "8880:8880"
+      - "127.0.0.1:8880:8880"
     environment:
       - DEVICE=cpu
       - PORT=8880

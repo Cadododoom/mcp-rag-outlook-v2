@@ -4,7 +4,7 @@ import random
 import time
 
 VLLM_URL = "http://localhost:8000/v1/chat/completions"
-EMBEDDING_URL = "http://localhost:8080/v1/embeddings"
+EMBEDDING_URL = "http://127.0.0.1:8080/v1/embeddings"
 MILVUS_URL = "http://localhost:18080"
 CONV_ID = "rag-volume-test-conv"
 

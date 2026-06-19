@@ -23,7 +23,7 @@ if (-not (Test-Path $ScratchDir)) {
 
 # 2. Restore Code Repositories
 Write-Host "`n[1/8] Restoring clean code repositories from Google Drive..." -ForegroundColor Cyan
-$Repos = @("mcp-rag-outlook", "vLLM_5060TI", "Qwen3-TTS-Stack", "vLLM-Container-Manager", "Hermes-Swarm-Director")
+$Repos = @("mcp-rag-outlook", "SGlang_5060ti", "Qwen3-TTS-Stack", "vLLM-Container-Manager", "Hermes-Swarm-Director")
 
 foreach ($Repo in $Repos) {
     $SourcePath = "$BackupRoot\repositories\$Repo"
@@ -85,10 +85,24 @@ if (Test-Path $HermesAppSource) {
     }
     
     # Restore directories
-    $HermesFolders = @("profiles", "skills", "sessions", "memories", "state-snapshots")
+    $HermesFolders = @("sessions", "memories", "state-snapshots")
     foreach ($Folder in $HermesFolders) {
         if (Test-Path "$HermesAppSource\$Folder") {
             robocopy "$HermesAppSource\$Folder" "$HermesAppDir\$Folder" /MIR /MT:8 /FFT /R:3 /W:5 /NP /NDL /NFL
+        }
+    }
+    
+    # Restore custom profiles and skills (unzip)
+    $HermesZips = @("profiles", "skills")
+    foreach ($Folder in $HermesZips) {
+        $ZipPath = "$HermesAppSource\$Folder.zip"
+        if (Test-Path $ZipPath) {
+            $DestFolder = "$HermesAppDir\$Folder"
+            if (-not (Test-Path $DestFolder)) {
+                New-Item -ItemType Directory -Path $DestFolder -Force | Out-Null
+            }
+            Write-Host "Unzipping $ZipPath to $DestFolder..." -ForegroundColor Yellow
+            Expand-Archive -Path $ZipPath -DestinationPath $DestFolder -Force
         }
     }
     
@@ -151,7 +165,11 @@ Write-Host "Launching RAG database and Kokoro TTS services..." -ForegroundColor 
 cmd.exe /c "cd `"$ScratchDir\mcp-rag-outlook`" && docker compose up -d"
 
 Write-Host "Launching vLLM GPU inference server and auth proxy..." -ForegroundColor Yellow
-cmd.exe /c "cd `"$ScratchDir\vLLM_5060TI`" && docker compose up -d"
+cmd.exe /c "cd `"$ScratchDir\SGlang_5060ti`" && docker compose up -d"
+
+Write-Host "Launching Qwen3-TTS streaming and web servers on AMD GPU..." -ForegroundColor Yellow
+cmd.exe /c "cd `"$ScratchDir\Qwen3-TTS-Stack`" && docker compose up -d"
+
 
 # 7b. Set Up and Launch Native Vulkan Embedding Server on AMD GPU
 Write-Host "`n[7/8] Setting up and starting native Vulkan embedding server..." -ForegroundColor Cyan

@@ -31,25 +31,26 @@ To allow any single agent to scale up to the model's native limit of **262K toke
 2.  **Tier 2: Host RAM & SSD (vLLM Swapping)**
     *   When the 380K VRAM limit is hit, vLLM automatically swaps inactive KV caches over the PCIe bus to host CPU RAM (`--swap-space 16` and `--cpu-offload-gb 8`).
     *   Uses high-speed DMA (Direct Memory Access) page-locked memory to execute these transfers in the background during active computation.
-3.  **Tier 3: Vector Database (Semantic Code Search)**
-    *   Rather than dumping entire source files directly into the active prompt window, static codebase context is indexed semantically into **Milvus**.
-    *   The agent calls the **AST-aware Code Indexer MCP** to query the database on demand, fetching only the top relevant code snippets (typically under 10K tokens) into its working context window.
+3.  **Tier 3: Vector Database (Semantic Code Search via CPU-Offloaded RAG)**
+    *   Rather than dumping entire source files directly into the active prompt window, static codebase context is indexed semantically into **LanceDB** using a **1-bit RaBitQ index** (\(x_q = \text{sign}(R \cdot (x - c_j))\)) to compress 1024-dimensional float32 vectors down to 136 bytes.
+    *   Search operations calculate Hamming distances on the host CPU using fast bitwise XOR and population count instructions.
+    *   At query time, the system performs a multi-stage retrieval:
+        *   **HiRAG Graph Retrieval**: Decomposes queries into Local, Bridge, or Global intents to traverse the entity relationship graph.
+        *   **RAPTOR Hierarchical Search**: Fetches leaf-level facts alongside parent summaries from the GMM-clustered tree.
+    *   All post-retrieval processing—including reranking via **BGE Reranker INT8 ONNX** and prompt compression via **LLMLingua-2**—is offloaded to the host CPU.
 
 ---
 
 ## Component Setup & Deployment
 
-### 1. Deploy the Stack (Milvus + Llama.cpp Embedding)
-1. Copy your `nomic-embed-text-v1.5.Q8_0.gguf` file to the local `./models/` directory.
-2. Ensure you have stopped any conflicting containers, then run:
-   ```powershell
-   docker compose up -d
-   ```
-This deploys the complete RAG and embedding infrastructure:
-*   **llama-cpp-embedding** (Port `8080`): Isolated embedding server running `llama.cpp`.
-*   **milvus-standalone** (Port `19530`): Standalone vector indexing and search database.
-*   **milvus-etcd** (Internal Port `2379`): Metadata storage.
-*   **milvus-minio** (Ports `9000` / `9001`): Object storage for vectors and indexes.
+### 1. CPU-Offloaded LanceDB & Reranking Setup
+The RAG pipeline operates locally on the host CPU to protect GPU VRAM:
+1.  Ensure the ONNX reranker model (`model.onnx` and `model.onnx_data`) is placed under `./models/bge_reranker_onnx/`.
+2.  Install dependencies:
+    ```powershell
+    pip install lancedb onnxruntime llmlingua
+    ```
+3.  The agent accesses this pipeline via the Workspace Skill `lancedb-raptor-rag-engine` dynamically.
 
 ### 2. Configure the MCP Server Launcher
 The folder `mcp_server` contains a pre-configured Node.js launcher wrapper.
@@ -66,7 +67,8 @@ The folder `mcp_server` contains a pre-configured Node.js launcher wrapper.
     # Run in the mcp_server folder
     cmd.exe /c npm install
     ```
-3.  Run or register the launcher (`launch-mcp.js`). The script performs a port check to verify that Milvus is online before starting the AST indexer.
+3.  Run or register the launcher (`launch-mcp.js`). The script performs a check to verify that the RAG indexes are ready before starting the indexer.
+
 
 ---
 
