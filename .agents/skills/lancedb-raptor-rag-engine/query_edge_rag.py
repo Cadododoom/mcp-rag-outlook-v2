@@ -63,14 +63,31 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
         scored_docs.sort(key=lambda x: x[1], reverse=True)
         top_k_docs = [item[0] for item in scored_docs[:15]]
         
-        # 3. Compress context using LLMLingua-2 extractive token classification on CPU
-        compressor = PromptCompressor(
-            model_name="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
-            device_map="cpu",
-            use_llmlingua2=True
-        )
+        # 3. Dynamic Bypass & Compression Cache
+        total_text = "\n\n".join(top_k_docs)
+        estimated_tokens = len(total_text) // 4
         
-        compressed_result = compressor.compress_prompt(
+        if estimated_tokens < 2500:
+            return json.dumps({
+                "query": query,
+                "compressed_payload": total_text,
+                "metadata": {
+                    "original_tokens": estimated_tokens,
+                    "compressed_tokens": estimated_tokens,
+                    "saving_ratio": "0.0% (bypassed)"
+                }
+            })
+            
+        # Initialize PromptCompressor lazily and cache it
+        global _compressor
+        if "_compressor" not in globals() or _compressor is None:
+            _compressor = PromptCompressor(
+                model_name="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
+                device_map="cpu",
+                use_llmlingua2=True
+            )
+        
+        compressed_result = _compressor.compress_prompt(
             context=top_k_docs,
             instruction="Analyze the system and generate the requested response.",
             question=query,
