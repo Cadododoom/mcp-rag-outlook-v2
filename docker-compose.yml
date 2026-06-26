@@ -23,8 +23,8 @@ services:
     volumes:
       - ./volumes/minio:/data
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:9008:9000"
+      - "127.0.0.1:9009:9001"
     command: minio server /data --console-address ":9001"
     restart: unless-stopped
     deploy:

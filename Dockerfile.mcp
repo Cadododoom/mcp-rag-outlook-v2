@@ -1,0 +1,45 @@
+FROM python:3.10-slim
+
+# Install system dependencies (curl, git, Node.js)
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Node.js dependencies
+COPY mcp_server/package*.json ./mcp_server/
+RUN cd mcp_server && npm install
+
+# Install Python RAG dependencies
+RUN pip install --no-cache-dir \
+    lancedb \
+    onnxruntime \
+    llmlingua \
+    sentence-transformers \
+    requests \
+    psutil
+
+# Pre-download and cache models inside the container for instant startup
+RUN python -c "\
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('BAAI/bge-small-en-v1.5'); \
+from llmlingua import PromptCompressor; \
+PromptCompressor(model_name='microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank', use_llmlingua2=True, device_map='cpu')"
+
+# Copy codebase
+COPY . .
+
+# Set environment defaults
+ENV MILVUS_ADDRESS=localhost:19530
+ENV EMBEDDING_PROVIDER=SentenceTransformers
+ENV EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
+
+# Expose launcher (clients communicate via standard I/O)
+# To run the memory manager: docker run -i --rm mcp-rag-server node mcp_server/launch-memory-mcp.js
+# To run the code indexer: docker run -i --rm mcp-rag-server node mcp_server/launch-mcp.js
+CMD ["node", "mcp_server/launch-memory-mcp.js"]
