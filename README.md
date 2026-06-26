@@ -88,17 +88,17 @@ To activate one of the configurations:
 
 ---
 
-## Virtual Context (22K Cap) & Memory Loop Design
+## Virtual Context (10K Cap) & Memory Loop Design
 
 ### How the Context Loop Operates:
-1.  **Client-Side Truncation**: Both OpenCode (OpenChamber) and Hermes Agent support a sliding dialog window. When the active chat history exceeds the client's configured context length (which we set to `22000` tokens in the profile), the client automatically truncates the oldest messages in the array before prompting the LLM.
+1.  **Client-Side Truncation**: Both OpenCode (OpenChamber) and Hermes Agent support a sliding dialog window. When the active chat history exceeds the client's configured context length (which we set to `10000` tokens in the profile), the client automatically truncates the oldest messages in the array before prompting the LLM.
 2.  **Losing History**: Standard sliding windows cause the model to lose track of early decisions, configuration settings, or task milestones.
 3.  **The Memory Loop Solution**:
-    *   **Milestone Checkpoints**: As the agent performs tasks, it proactively calls the tool:
+4.  **Milestone Checkpoints**: As the agent performs tasks, it proactively calls the tool:
         `store_chat_memory(conversationId, "Milestone summary", "Details of decisions/credentials")`
     *   **Retrieval on Demand**: When the agent needs to verify past details (or when it realizes history has been truncated), it calls:
         `retrieve_chat_memory(conversationId, "credentials or decisions setup")`
-    *   **VRAM Efficiency**: Since the retrieved snippet is extremely small (under 1K tokens), the agent can query 1M+ tokens of conversation history without inflating the active context beyond 22k tokens. This guarantees that **16 agents** can run simultaneously in GPU VRAM without causing swapping latency.
+    *   **VRAM Efficiency**: Since the retrieved snippet is extremely small (under 1K tokens), the agent can query 1M+ tokens of conversation history without inflating the active context beyond 10k tokens. This guarantees that **32 agents** can run simultaneously in GPU VRAM without causing swapping latency.
 
 ---
 

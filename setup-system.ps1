@@ -47,7 +47,7 @@ if (Test-Path $OpenCodeConfig) {
     Write-Host "Backed up existing OpenCode configuration to opencode.json.bak" -ForegroundColor Yellow
 }
 Copy-Item "$RepoDir\config\opencode_virtual_ctx.json" $OpenCodeConfig -Force
-Write-Host "Enforced 22k Virtual Context profile in OpenCode." -ForegroundColor Green
+Write-Host "Enforced 10k Virtual Context profile in OpenCode." -ForegroundColor Green
 
 # 5. Configure Hermes Agent Config
 Write-Host "`n[5/6] Registering MCP servers in Hermes Agent..." -ForegroundColor Cyan

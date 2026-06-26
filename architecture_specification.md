@@ -21,12 +21,19 @@ graph TD
 
     %% RAG Retrieval Loop
     subgraph RAG Tier [RAG Retrieval Loop]
-        D -- "4. Tool Call: retrieve_chat_memory" --> E[Node MCP Launcher <br> Std I/O]
-        E -- "5. Run Python RAG Engine" --> F[query_edge_rag.py]
-        F -- "6. Flat L2 Exact Search" --> G[(LanceDB Database <br> 319 Code Chunks)]
-        G -- "7. Retrieve relevant chunks" --> H[ONNX Cross-Encoder Reranker <br> INT8 CPU]
-        H -- "8. Dynamic prompt compression" --> I[LLMLingua-2 Compressor <br> 6-8 CPU Threads]
-        I -- "9. Return compressed context" --> D
+        D -- "4a. Tool Call: query_edge_rag" --> E[Hermes Agent Skill Engine]
+        E -- "5a. Run Python RAG Script" --> F[query_edge_rag.py]
+        F -- "6a. Flat L2 Exact Search" --> G[(LanceDB Database <br> raptor_collapsed_index)]
+        G -- "7a. Retrieve relevant chunks" --> H[ONNX Cross-Encoder Reranker <br> INT8 CPU]
+        H -- "8a. Dynamic prompt compression" --> I[LLMLingua-2 Compressor <br> 6-8 CPU Threads]
+        I -- "9a. Return compressed context" --> D
+    end
+
+    %% Memory Loop
+    subgraph Memory Tier [Memory Loop]
+        D -- "4b. Tool Call: retrieve_chat_memory / store_chat_memory" --> J[Memory Manager MCP <br> Python stdio container]
+        J -- "5b. semantic retrieval / store" --> K[(LanceDB Database <br> agent_memories)]
+        K -- "6b. Return context / confirmation" --> D
     end
 
     %% Styling
@@ -35,6 +42,8 @@ graph TD
     style D fill:#10B981,stroke:#047857,stroke-width:2px,color:#fff
     style F fill:#F59E0B,stroke:#D97706,stroke-width:2px,color:#fff
     style G fill:#EC4899,stroke:#BE185D,stroke-width:2px,color:#fff
+    style J fill:#8B5CF6,stroke:#5B21B6,stroke-width:2px,color:#fff
+    style K fill:#EC4899,stroke:#BE185D,stroke-width:2px,color:#fff
 ```
 
 ---
@@ -48,17 +57,25 @@ graph TD
             A[Hermes/OpenCode Client] -- "Host Port 30000" --> V_PROXY
         end
 
-        subgraph Speculative Serving Network [vLLM Serving Compose Stack]
+        subgraph Serving Network [vLLM Serving Compose Stack]
             V_PROXY[SGlang_5060ti_Proxy <br> Port 30000] -- "Intercepts & truncates" --> V_VLLM[SGlang_5060ti <br> Qwen 35B NVFP4 on GPU]
         end
         
-        subgraph Ephemeral Execution [Ephemeral Docker Container]
-            MCP_CONTAINER[mcp-rag-server <br> Node+Python stdio image] -- "Mounts host folder" --> HOST_DATA[(Host Directory: ./data <br> LanceDB In-process DB)]
+        subgraph Hermes Agent Container [Hermes Agent Container Stack]
+            H_AGENT[hermes-web-app <br> nousresearch/hermes-agent] -- "Mounts host folder" --> SKILLS[/opt/mcp-rag-outlook/.agents/skills <br> query_edge_rag.py]
+            H_AGENT -- "Spawns stdio MCP" --> MCP_CONTAINER[mcp-rag-server <br> python3 launch-memory-mcp.py]
+        end
+
+        subgraph Shared Volume [Shared Storage]
+            HOST_DATA[(Host Directory: ./data/lancedb_store <br> LanceDB In-process DB)]
         end
     end
 
     %% Communication paths
+    V_VLLM -- "Tool Call: query_edge_rag" --> SKILLS
     V_VLLM -- "Tool Call: retrieve_chat_memory" --> MCP_CONTAINER
+    SKILLS -- "Read/Write" --> HOST_DATA
+    MCP_CONTAINER -- "Read/Write" --> HOST_DATA
 ```
 
 ---
@@ -75,7 +92,7 @@ graph TD
 | | Concurrency Targets | `--max-num-seqs 32` | Scales serving scheduler queue to handle 32 parallel agent queries. |
 | | Prefill Strategy | `--enable-chunked-prefill` | Caps prefill to 8,192 tokens per step to prevent prefill latency spikes. |
 | **Proxy Level** | Port Binding | `30000:30000` | Intercepts all incoming client requests on host port 30000. |
-| | Interception Proxy | `vllm-auth-proxy` (`proxy.py`) | Silently intercepts request payloads, truncating them down to 22,000 tokens. |
+| | Interception Proxy | `vllm-auth-proxy` (`proxy.py`) | Silently intercepts request payloads, truncating them down to 10,000 tokens. |
 | | Truncation Warning | User message injection | Appends `[SYSTEM WARNING]` to the last user message when truncation occurs to alert model to trigger RAG. |
 | **RAG Database** | Vector Store | `LanceDB` (In-process columnar) | Zero-copy Apache Arrow format. Eliminates IPC serialization overhead during high-concurrency requests. |
 | | Index Mode | Flat L2 Scan | Exact nearest-neighbor scanning. Bypasses ANN index (`IVF_RQ`) to prevent recall corruption on small codebases. |

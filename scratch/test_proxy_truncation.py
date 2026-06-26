@@ -15,8 +15,8 @@ def main():
     system_msg = {"role": "system", "content": "You are a helpful assistant."}
     
     # Create a very old user message that we want to get truncated
-    # 25,000 tokens is about 100,000 characters
-    large_old_content = "X" * 100000 # ~25,000 tokens
+    # 15,000 tokens is about 60,000 characters
+    large_old_content = "X" * 60000 # ~15,000 tokens
     old_msg = {"role": "user", "content": f"Old context: {large_old_content}"}
     
     # Create a recent user query
@@ -50,10 +50,10 @@ def main():
     prompt_tokens = usage.get("prompt_tokens", 0)
     print(f"Prompt tokens reported by vLLM: {prompt_tokens}")
     
-    # The proxy limit is 22,000 tokens. The prompt_tokens must be <= 22,000 tokens plus a small delta,
-    # and definitely less than the 25,000+ tokens we sent (which would have been ~25,000 + 10 = ~25,010 tokens).
-    print(f"Is prompt truncated? {prompt_tokens < 23000}")
-    assert prompt_tokens < 23000, f"Expected prompt to be truncated below 23,000 tokens, got {prompt_tokens}"
+    # The proxy limit is 10,000 tokens. The prompt_tokens must be <= 10,000 tokens plus a small delta,
+    # and definitely less than the 15,000+ tokens we sent (which would have been ~15,000 + 10 = ~15,010 tokens).
+    print(f"Is prompt truncated? {prompt_tokens < 11000}")
+    assert prompt_tokens < 11000, f"Expected prompt to be truncated below 11,000 tokens, got {prompt_tokens}"
     
     print("=== Truncation Test PASSED! ===")
 
