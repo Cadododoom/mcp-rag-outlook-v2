@@ -8,28 +8,8 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 const milvusAddress = process.env.MILVUS_ADDRESS || 'localhost:19530';
 const [host, port] = milvusAddress.split(':');
 
-console.error(`[Launcher] Testing connection to Milvus standalone at ${host}:${port}...`);
-
-const socket = new net.Socket();
-socket.setTimeout(3000);
-
-socket.on('connect', () => {
-  console.error('[Launcher] Successfully connected to Milvus standalone database.');
-  socket.destroy();
-  launch();
-});
-
-socket.on('timeout', () => {
-  console.error('[Launcher] Error: Connection to Milvus timed out. Make sure the Docker container is running.');
-  process.exit(1);
-});
-
-socket.on('error', (err) => {
-  console.error(`[Launcher] Error: Failed to connect to Milvus at ${host}:${port}. Details: ${err.message}`);
-  process.exit(1);
-});
-
-socket.connect(parseInt(port || '19530'), host || 'localhost');
+console.error(`[Launcher] Skipping Milvus standalone connection test (running CPU-offloaded LanceDB)...`);
+launch();
 
 function launch() {
   const { spawn } = require('child_process');
