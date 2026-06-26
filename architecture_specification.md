@@ -42,30 +42,23 @@ graph TD
 ## 2. Docker Container Deployment Mapping
 
 ```mermaid
-graph LR
+graph TD
     subgraph Host Workstation [Host Workstation CPU/RAM & GPU]
-        subgraph Docker Bridge Network [Docker Compose Network]
-            M_STANDALONE[milvus-standalone <br> Port 18080]
-            M_MINIO[milvus-minio <br> Port 9008/9009]
-            M_ETCD[milvus-etcd]
-            K_TTS[kokoro-tts <br> Port 8880]
+        subgraph Client Access [Client Access]
+            A[Hermes/OpenCode Client] -- "Host Port 30000" --> V_PROXY
         end
 
-        subgraph Speculative Serving Network [vLLM Speculative compose]
-            V_VLLM[SGlang_5060ti <br> Qwen 35B NVFP4 on GPU]
-            V_PROXY[SGlang_5060ti_Proxy <br> Port 30000]
+        subgraph Speculative Serving Network [vLLM Serving Compose Stack]
+            V_PROXY[SGlang_5060ti_Proxy <br> Port 30000] -- "Intercepts & truncates" --> V_VLLM[SGlang_5060ti <br> Qwen 35B NVFP4 on GPU]
         end
         
-        subgraph Ephemeral Containers [Ephemeral Standard I/O Containers]
-            MCP_CONTAINER[mcp-rag-server <br> Node+Python Image]
+        subgraph Ephemeral Execution [Ephemeral Docker Container]
+            MCP_CONTAINER[mcp-rag-server <br> Node+Python stdio image] -- "Mounts host folder" --> HOST_DATA[(Host Directory: ./data <br> LanceDB In-process DB)]
         end
     end
 
     %% Communication paths
-    V_PROXY -- "Local Network Link" --> V_VLLM
-    A[Hermes/OpenCode Client] -- "Host Port 30000" --> V_PROXY
-    MCP_CONTAINER -- "Host Network Mode" --> M_STANDALONE
-    MCP_CONTAINER -- "Host Network Mode" --> V_PROXY
+    V_VLLM -- "Tool Call: retrieve_chat_memory" --> MCP_CONTAINER
 ```
 
 ---
