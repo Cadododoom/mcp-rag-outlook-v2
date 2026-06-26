@@ -50,10 +50,9 @@ def main():
     prompt_tokens = usage.get("prompt_tokens", 0)
     print(f"Prompt tokens reported by vLLM: {prompt_tokens}")
     
-    # The proxy limit is 10,000 tokens. The prompt_tokens must be <= 10,000 tokens plus a small delta,
-    # and definitely less than the 15,000+ tokens we sent (which would have been ~15,000 + 10 = ~15,010 tokens).
-    print(f"Is prompt truncated? {prompt_tokens < 11000}")
-    assert prompt_tokens < 11000, f"Expected prompt to be truncated below 11,000 tokens, got {prompt_tokens}"
+    # The proxy limit is 10,000 tokens. The prompt_tokens must be <= 10,000 tokens.
+    print(f"Is prompt truncated? {prompt_tokens <= 10000}")
+    assert prompt_tokens <= 10000, f"Expected prompt to be truncated below 10,000 tokens, got {prompt_tokens}"
     
     print("=== Truncation Test PASSED! ===")
 
