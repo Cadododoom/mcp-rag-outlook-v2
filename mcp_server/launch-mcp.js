@@ -18,10 +18,10 @@ function launch() {
   // Setup environment for the child process
   const childEnv = {
     ...process.env,
-    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER || 'OpenAI',
-    OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || 'http://localhost:1234/v1',
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'lm-studio',
-    EMBEDDING_MODEL: process.env.EMBEDDING_MODEL || 'text-embedding-nomic-embed-text-v1.5@q8_0',
+    EMBEDDING_PROVIDER: 'OpenAI',
+    OPENAI_BASE_URL: 'http://127.0.0.1:8080/v1',
+    OPENAI_API_KEY: 'none',
+    EMBEDDING_MODEL: 'nomic-embed-text-v1.5.Q8_0.gguf',
     MILVUS_ADDRESS: milvusAddress
   };
 
