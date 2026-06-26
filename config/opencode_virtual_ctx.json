@@ -78,7 +78,7 @@
     },
     "vllm": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "vLLM 5060ti Stack (Virtual 11k Context)",
+      "name": "vLLM 5060ti Stack (Virtual 10k Context)",
       "options": {
         "baseURL": "http://localhost:30000/v1",
         "apiKey": "none",
@@ -93,9 +93,9 @@
       },
       "models": {
         "nvidia/Qwen3.6-35B-A3B-NVFP4": {
-          "name": "Qwen 35B NVFP4 (Capped 11k)",
+          "name": "Qwen 35B NVFP4 (Capped 10k)",
           "max_tokens": 1000,
-          "context_length": 11000,
+          "context_length": 10000,
           "attachment": true,
           "modalities": {
             "input": [

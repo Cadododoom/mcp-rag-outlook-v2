@@ -4,7 +4,7 @@
 
 This document presents a research-backed architectural blueprint for scaling local Multi-Agent Retrieval-Augmented Generation (RAG) systems to handle **1,000,000 token context windows** in user-end applications (such as OpenCode/OpenChamber, Cursor, and Hermes Agent). 
 
-While modern large language models claim native support for 1M+ token context windows, serving these sequences directly to **32 concurrent agents** is mathematically prohibitive on consumer-grade hardware (like a dual RTX 5060 Ti cluster). By employing a **Tiered Context Memory Architecture**, we can present the illusion of a 1M token context to user applications while maintaining a tight, high-throughput **11k active VRAM footprint** per agent, guaranteeing latency stability and preventing out-of-memory (OOM) failures.
+While modern large language models claim native support for 1M+ token context windows, serving these sequences directly to **32 concurrent agents** is mathematically prohibitive on consumer-grade hardware (like a dual RTX 5060 Ti cluster). By employing a **Tiered Context Memory Architecture**, we can present the illusion of a 1M token context to user applications while maintaining a tight, high-throughput **10k active VRAM footprint** per agent, guaranteeing latency stability and preventing out-of-memory (OOM) failures.
 
 ---
 
@@ -28,8 +28,8 @@ $$\text{VRAM}_{\text{Total KV}} = 32 \times 9.77 \text{ GiB} = 312.64 \text{ GiB
 
 Adding the static model weight footprint (**21.00 GB**) and dynamic activation memory makes native 1M context scaling completely impossible on a 32 GB VRAM hardware cluster.
 
-### 2.2 Tiered Context Redesign (11k Cap)
-By capping the active VRAM context length at $11,000$ tokens per sequence, we reduce the individual agent KV cache footprint to **112.64 MB** ($1.80$ GB per GPU for 32 agents), freeing up host resources for CPU-offloaded indexing and prompt compression.
+### 2.2 Tiered Context Redesign (10k Cap)
+By capping the active VRAM context length at $10,000$ tokens per sequence, we reduce the individual agent KV cache footprint to **102.40 MB** ($1.64$ GB per GPU for 32 agents), freeing up host resources for CPU-offloaded indexing and prompt compression.
 
 ---
 

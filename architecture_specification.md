@@ -87,9 +87,9 @@ graph TD
 | **Model Serving** | Served Model | `nvidia/Qwen3.6-35B-A3B-NVFP4` | 35B parameter hybrid DeltaNet model post-training quantized to 4-bit to fit sharded VRAM limit. |
 | | Tensor Parallel Size | `--tensor-parallel-size 2` | Shards weights evenly across dual GPUs (10.50 GB per GPU). |
 | | KV Cache Precision | `--kv-cache-dtype fp8` | Reduces KV cache footprint per token by 50% to **10.24 KB**. |
-| | Memory Utilization | `--gpu-memory-utilization 0.90` | Reserves a safe 3.20 GB physical buffer to prevent runtime OOMs. |
-| | Active Context Ceiling | `--max-model-len 11000` | Allocates a 10,000-token active history window plus a 1,000-token generation buffer. |
-| | Concurrency Targets | `--max-num-seqs 32` | Scales serving scheduler queue to handle 32 parallel agent queries. |
+| | Memory Utilization | `--gpu-memory-utilization 0.95` | High-utilization pool to maximize physical KV cache capacity on dual GPUs. |
+| | Active Context Ceiling | `--max-model-len 10000` | Allocates a strict 10,000-token active window matching the proxy rules. |
+| | Concurrency Targets | `--max-num-seqs 10` | Limits concurrent decode sequences to 10 to fit the model's physical Mamba cache blocks. |
 | | Prefill Strategy | `--enable-chunked-prefill` | Caps prefill to 8,192 tokens per step to prevent prefill latency spikes. |
 | **Proxy Level** | Port Binding | `30000:30000` | Intercepts all incoming client requests on host port 30000. |
 | | Interception Proxy | `vllm-auth-proxy` (`proxy.py`) | Silently intercepts request payloads, truncating them down to 10,000 tokens. |
