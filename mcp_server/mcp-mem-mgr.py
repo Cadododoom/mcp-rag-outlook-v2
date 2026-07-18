@@ -7,6 +7,8 @@ import lancedb
 from lancedb.embeddings import get_registry
 from lancedb.pydantic import LanceModel, Vector
 
+import torch
+
 # Set model names
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 
@@ -20,8 +22,11 @@ if not db_path:
 os.makedirs(os.path.dirname(db_path), exist_ok=True)
 db = lancedb.connect(db_path)
 
+# Detect device dynamically (prefer RX 5700 / cuda:1 if multiple GPUs exist)
+target_device = "cuda:1" if torch.cuda.is_available() and torch.cuda.device_count() > 1 else ("cuda" if torch.cuda.is_available() else "cpu")
+
 # Initialize embedding registry
-embedding_func = get_registry().get("sentence-transformers").create(name=EMBEDDING_MODEL)
+embedding_func = get_registry().get("sentence-transformers").create(name=EMBEDDING_MODEL, device=target_device)
 
 class AgentMemory(LanceModel):
     id: int

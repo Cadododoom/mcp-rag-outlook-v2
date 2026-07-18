@@ -8,8 +8,9 @@ def main():
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     db = lancedb.connect(db_path)
 
-    # Use a small local model for embedding
-    embedding_func = get_registry().get("sentence-transformers").create(name="BAAI/bge-small-en-v1.5")
+    import torch
+    target_device = "cuda:1" if torch.cuda.is_available() and torch.cuda.device_count() > 1 else ("cuda" if torch.cuda.is_available() else "cpu")
+    embedding_func = get_registry().get("sentence-transformers").create(name="BAAI/bge-small-en-v1.5", device=target_device)
 
     class RaptorIndex(LanceModel):
         text: str = embedding_func.SourceField()
