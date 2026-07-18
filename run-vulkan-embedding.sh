@@ -9,4 +9,4 @@ LlamaServer="$BinDir/llama-server"
 echo "Starting Vulkan embedding server on host port 8080..."
 echo "Offloading 100% of layers to GPU..."
 
-exec "$LlamaServer" -m "$ModelPath" -c 2048 --port 8080 --embedding --device "Vulkan0" -ngl 99
+exec "$LlamaServer" -m "$ModelPath" -c 2048 -b 2048 -ub 2048 --port 8080 --embedding --device "Vulkan0" -ngl 99

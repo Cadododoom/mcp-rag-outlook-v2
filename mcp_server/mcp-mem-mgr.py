@@ -22,11 +22,26 @@ if not db_path:
 os.makedirs(os.path.dirname(db_path), exist_ok=True)
 db = lancedb.connect(db_path)
 
-# Detect device dynamically (prefer RX 5700 / cuda:1 if multiple GPUs exist)
-target_device = "cuda:1" if torch.cuda.is_available() and torch.cuda.device_count() > 1 else ("cuda" if torch.cuda.is_available() else "cpu")
+from lancedb.embeddings.openai import OpenAIEmbeddings
 
-# Initialize embedding registry
-embedding_func = get_registry().get("sentence-transformers").create(name=EMBEDDING_MODEL, device=target_device)
+class NomicVulkanEmbeddings(OpenAIEmbeddings):
+    @property
+    def _ndims(self):
+        return 768
+
+# Register custom Vulkan embeddings class
+try:
+    get_registry().register("nomic-vulkan")(NomicVulkanEmbeddings)
+except KeyError:
+    pass
+
+# Initialize embedding registry with Vulkan llama-server on port 8080
+os.environ["OPENAI_API_KEY"] = "sk-dummy"
+base_url = "http://host.docker.internal:8080/v1" if os.path.exists("/.dockerenv") else "http://localhost:8080/v1"
+embedding_func = get_registry().get("nomic-vulkan").create(
+    name="nomic-embed-text-v1.5", 
+    base_url=base_url
+)
 
 class AgentMemory(LanceModel):
     id: int
@@ -60,12 +75,12 @@ def store_chat_memory(conversation_id, summary, details):
     return f"Successfully stored memory in database for conversation {conversation_id}."
 
 def retrieve_chat_memory(conversation_id, query, limit=5):
-    # Prefix query for BGE retrieval model
-    bge_query = f"Represent this sentence for searching relevant passages: {query}"
+    # Prefix query for Nomic retrieval model
+    nomic_query = f"search_query: {query}"
     
     # We query the table
     table = get_table()
-    results = table.search(bge_query).where(f'conversationId == "{conversation_id}"').limit(limit).to_arrow()
+    results = table.search(nomic_query).where(f'conversationId == "{conversation_id}"').limit(limit).to_arrow()
     pydict = results.to_pydict()
     
     texts = pydict.get("text", [])

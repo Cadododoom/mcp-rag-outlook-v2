@@ -4,6 +4,7 @@ import sys
 # Force offline mode for Hugging Face to load models instantly from cache
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["OPENAI_API_KEY"] = "sk-dummy"
 
 # Limit CPU threads to 1/8th of the system CPU (min 2, max 8 threads) to prevent CPU starvation
 num_cpus = os.cpu_count() or 1
@@ -56,9 +57,9 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
             _table = _db.open_table(table_name)
             
         if _table is not None:
-            # Prefix query for BGE retrieval model
-            bge_query = f"Represent this sentence for searching relevant passages: {query}"
-            results = _table.search(bge_query).limit(50).to_arrow()
+            # Prefix query for Nomic retrieval model
+            nomic_query = f"search_query: {query}"
+            results = _table.search(nomic_query).limit(50).to_arrow()
             documents = results.to_pydict().get("text", [])
         else:
             # Fallback if table doesn't exist yet

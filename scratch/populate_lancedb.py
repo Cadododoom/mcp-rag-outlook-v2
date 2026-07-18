@@ -8,9 +8,25 @@ def main():
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     db = lancedb.connect(db_path)
 
-    import torch
-    target_device = "cuda:1" if torch.cuda.is_available() and torch.cuda.device_count() > 1 else ("cuda" if torch.cuda.is_available() else "cpu")
-    embedding_func = get_registry().get("sentence-transformers").create(name="BAAI/bge-small-en-v1.5", device=target_device)
+    from lancedb.embeddings.openai import OpenAIEmbeddings
+
+    class NomicVulkanEmbeddings(OpenAIEmbeddings):
+        @property
+        def _ndims(self):
+            return 768
+
+    # Register custom Vulkan embeddings class
+    try:
+        get_registry().register("nomic-vulkan")(NomicVulkanEmbeddings)
+    except KeyError:
+        pass
+
+    os.environ["OPENAI_API_KEY"] = "sk-dummy"
+    base_url = "http://host.docker.internal:8080/v1" if os.path.exists("/.dockerenv") else "http://localhost:8080/v1"
+    embedding_func = get_registry().get("nomic-vulkan").create(
+        name="nomic-embed-text-v1.5", 
+        base_url=base_url
+    )
 
     class RaptorIndex(LanceModel):
         text: str = embedding_func.SourceField()
@@ -35,10 +51,8 @@ def main():
     ]
 
     print("Ingesting test documents...")
-    table.add(test_docs)
-
-    print("Creating IVF_RQ index on vector column...")
-    table.create_index(vector_column_name="vector", index_type="IVF_RQ")
+    prefixed_docs = [{"text": f"search_document: {item['text']}"} for item in test_docs]
+    table.add(prefixed_docs)
     
     print("LanceDB test database populated successfully!")
 
