@@ -6,9 +6,9 @@
 
 | Query | RAG Latency (s) | RAG Avg CPU (%) | RAG Max CPU (%) | Original Context (tokens) | Compressed Context (tokens) | Compression Ratio | Gen Latency (s) | Gen Avg CPU (%) | Prompt Tokens | Completion Tokens |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| How is connection retrying configured and handled in HTTPAdapter? | 11.03 | 8.2% | 17.2% | 3748 | 827 | 4.5x | 6.48 | 8.4% | 948 | 1000 |
-| What is the structure of Session.request and how does it merge cookies? | 9.36 | 8.9% | 33.3% | 3735 | 795 | 4.7x | 6.44 | 8.2% | 917 | 1000 |
-| Where is the PreparedRequest class defined, and what does its prepare_auth method do? | 9.18 | 8.5% | 18.7% | 3860 | 853 | 4.5x | 6.45 | 8.4% | 975 | 1000 |
+| How is connection retrying configured and handled in HTTPAdapter? | 65.26 | 10.5% | 27.7% | 4231 | 3368 | 20.4% | 10.59 | 13.2% | 3297 | 1444 |
+| What is the structure of Session.request and how does it merge cookies? | 81.29 | 10.7% | 31.0% | 3608 | 734 | 79.7% | 13.08 | 15.0% | 848 | 1822 |
+| Where is the PreparedRequest class defined, and what does its prepare_auth method do? | 64.64 | 10.1% | 30.2% | 4461 | 4461 | 0.0% (bypassed) | 3.98 | 14.1% | 4319 | 468 |
 
 ## Qualitative Output Assessment
 
@@ -16,34 +16,67 @@
 
 **Answer:**
 
-Here's a thinking process:
+<think>
+We need to answer: "How is connection retrying configured and handled in HTTPAdapter?" based on the provided RAG context.
 
-1.  **Understand User Question:** The user asks: "How is connection retrying configured and handled in HTTPAdapter?" based on the provided RAG context from the `requests` library codebase.
+The context includes snippets from requests/adapters.py. We need to extract information about retry configuration and handling.
 
-2.  **Analyze RAG Context:** I need to scan the provided chunks for information related to:
-   - `HTTPAdapter`
-   - Retry configuration/handling
-   - `max_retries`
-   - `Retry` class/object
-   - How it's initialized, used, and applied
+From the snippets:
 
-   Let's extract relevant snippets:
-   - *Chunk 1 (Lines 161-190):* Mentions `max_retries`, `Retry` config, `pool_connections`, `pool_maxsize`, `pool_block`, `urllib3`, `HTTPAdapter`, `max_retries = 3`, `s.mount(...)`, `Retry` config dict, `proxy_manager`, `pool_connections`, `pool_maxsize`, `pool_block`, `poolmanager`, `init`, `DEFAULT_POOLSIZE`, `retries`, `Retry`, `DEFAULT_RETRIES`, `max_retries`, `Retry(0, read=False)`.
-   - *Chunk 2 (Lines 181-210):* Similar to Chunk 1, mentions `max_retries 3`, `s.mount`, `attrs list str max retries config pool connections maxsize block`, `max retries Retry config dict proxy manager pool connections int pool maxsize block bool poolmanager init connections DEFAULT POOLSIZE retries Retry DEFAULT RETRIES block max retries DEFAULT RETRIES max retries Retry 0 read False`.
-   - *Chunk 3 (Lines 201-230):* `init self pool_connections int DEFAULT_POOLSIZE pool_maxsize max_retries Retry RETRIES pool_block DEFAULT None max_retries max_retries = Retry retries Retry int config self.proxy_manager super init pool_connections pool_maxsize maxsize block pool init poolmanager pool getstate_ self dict [ str return attr : getattr None attrs setstate_ self state dict [ str None adding proxy_manager ' self attrs poolmanager lambda function proxy_manager self config`
-   - *Chunk 4 (Lines 21-50):* Mentions `MaxRetryError`, `NewConnectionError`, `ProtocolError`, `ReadTimeoutError`, `ResponseError`, `urllib3`, `HTTPError`, `InvalidHeader`, `ProxyError`, `SSLError`, `poolmanager`, `proxy`, `Timeout`, `parse_url`, `Retry`, `auth`, `basestring`, `urlparse`, `cookies`, `extract_cookies`, `jar`, `exceptions`, `ConnectionError`, `ConnectTimeout`, `InvalidHeader`, `ProxyError`, `ReadTimeout`, `RetryError`, `SSLError`.
-   - *Chunk 5 (Lines 121-150):* `BaseAdapter`, `Transport Adapter`, `def init self None super ( send self request PreparedRequest stream False timeout : _ t None verify : _ t cert : _ t None proxies dict str Response Sends PreparedRequest object Returns param request param stream optional request content timeout wait server send data before connect timeout verify boolean controls server TLS certificate string path to CA bundle param cert user - provided SSL certificate trusted param proxies apply request`
-   - *Chunk 6 (Lines 681-710):* Mentions `isinstance timeout tuple connect read timeout resolved TimeoutSauce ValueError raise f Invalid timeout Pass connect read timeout tuple float set timeouts same isinstance timeout TimeoutSauce connect timeout read resp = conn urlopen method request url url ignore headers request ignore urllib3 3072 redirect = False assert host preload content decode retries timeout resolved ProtocolError OSError err`
+- Lines 181-210: Shows `__attrs__` list includes "max_retries", "config", "_pool_connections", "_pool_maxsize", "_pool_block". Then `max_retries: Retry` attribute. The `__init__` method takes `max_retries: int | Retry = DEFAULT_RETRIES`. If `max_retries == DEFAULT_RETRIES`, it sets `self.max_retries = Retry(0, read=False)`. Otherwise, it presumably sets `self.max_retries = max_retries` (the snippet cuts off, but we can infer). So retrying is configured via the `max_retries` parameter, which can be an integer or a `Retry` object. The default is `DEFAULT_RETRIES`, which results in a `Retry(0, read=False)` object. This means by default, no retries are performed (0 retries, and read retries disabled). The `Retry` class is from urllib3.
 
-   The context is a bit fragmented due to OCR/text extraction artifacts, but I can piece together the key concepts:
-   - `HTTPAdapter` uses `urllib3`'s `Retry` class for configuring retries.
-   - The `__init__` method of `HTTPAdapter` takes a `max_retries` parameter.
-   - Default value for `max_retries` is typically `Retry.DEFAULT` or `Retry(0, read=False)` (or similar, based on `DEFAULT_RETRIES`).
-   - `max_retries` can be an integer, a `Retry` object, or a dictionary/config.
-   - It's applied when initializing the `urllib3` `PoolManager` (or `proxy_manager`).
-   - The `Retry` configuration controls behavior for failed DNS lookups, socket connections, timeouts, and connection failures.
-   - Specific retry conditions/errors are handled (e.g., `MaxRetryError`, `NewConnectionError`, `ReadTimeoutError`, `ProtocolError`, `OSError`).
-   - The `send
+- Lines 161-190: Docstring for HTTPAdapter: "max_retries: The maximum number of retries each connection should attempt. Note, this applies only to failed DNS lookups, socket connections and connection timeouts, never to requests where data has made it to the server. By default, Requests does not retry failed connections. If you need granular control over the conditions under which we retry a request, import urllib3's Retry class and pass that instead."
+
+- Lines 221-250: `__getstate__` and `__setstate__` methods handle pickling, including `max_retries`. Also `init_poolmanager` method.
+
+- Lines 501-530: `get_connection` method deprecated, replaced by `get_connection_with_tls_context`.
+
+- Lines 521-550: `get_connection_with_tls_context` method.
+
+- Lines 581-610: `get_redirect_location` and `add_headers`.
+
+- Lines 621-650: `proxy_headers` and `send` method.
+
+- Lines 601-630: `proxy_headers` again.
+
+- Lines 681-710: `send` method implementation: it resolves timeout, calls `conn.urlopen` with `retries=Retry(...)`. The snippet shows: `resp = conn.urlopen(method, request.url, ... retries=Retry(...), ...)`. So the `send` method uses the `max_retries` attribute to configure retries for the urllib3 connection pool. It likely creates a `Retry` object from `self.max_retries` and passes it to `urlopen`. The snippet shows `retries=Retry(...)` but the exact code is cut off. However, we can infer that the `send` method uses `self.max_retries` to configure retries.
+
+- Lines 21-50: Imports and exceptions, including `RetryError`.
+
+So the answer should cover:
+
+- Configuration: `HTTPAdapter` accepts a `max_retries` parameter in its constructor, which can be an integer or a `Retry` object. If it's the default `DEFAULT_RETRIES`, it's set to `Retry(0, read=False)`, meaning no retries. The docstring explains that retries apply only to failed DNS lookups, socket connections, and connection timeouts, not to requests that reached the server.
+
+- Handling: In the `send` method, the adapter uses `self.max_retries` to configure the retry behavior of the underlying urllib3 connection pool. It passes the `max_retries` (or a `Retry` object) to `conn.urlopen` as the `retries` parameter. This allows urllib3 to handle retries according to the specified policy.
+
+- The `Retry` class from urllib3 provides granular control over retry conditions (e.g., which status codes, which methods, etc.). The adapter's `max_retries` can be a `Retry` instance to customize retry behavior.
+
+- The adapter also has a `config` attribute (a dict) that might be used for urllib3 configuration, but the context doesn't show how it's used for retries.
+
+- The `__attrs__` list includes `max_retries`, so it's pickled and restored.
+
+Thus, the answer: Connection retrying is configured via the `max_retries` parameter of `HTTPAdapter`. By default, it's set to `Retry(0, read=False)`, meaning no retries. Users can pass an integer (number of retries) or a `Retry` object from urllib3 for granular control. The `send` method uses this `max_retries` attribute to configure the retry behavior of the underlying urllib3 connection pool when making requests. Retries apply only to failed DNS lookups, socket connections, and connection timeouts, not to requests that successfully reached the server.
+
+We'll craft a concise answer based on the context.
+
+</think>
+
+
+
+Connection retrying in `HTTPAdapter` is configured through the `max_retries` parameter and handled by delegating to urllib3's `Retry` class.
+
+**Configuration**
+- The `HTTPAdapter` constructor accepts a `max_retries` argument, which can be an integer or a `Retry` object from urllib3.
+- By default, `max_retries` is set to `DEFAULT_RETRIES`, which translates to `Retry(0, read=False)`. This means **no retries** are performed by default.
+- The docstring clarifies that retries apply **only** to failed DNS lookups, socket connections, and connection timeouts—not to requests that have already reached the server.
+- If you need granular control (e.g., retry on specific status codes or methods), you can pass a `Retry` instance directly.
+
+**Handling**
+- In the `send` method, the adapter uses `self.max_retries` to configure the retry behavior of the underlying urllib3 connection pool. It passes the `max_retries` attribute (or a `Retry` object) as the `retries` parameter to `conn.urlopen`.
+- The `Retry` object encapsulates the retry policy, and urllib3 handles the actual retry logic (e.g., exponential backoff, which errors to retry, etc.).
+- The `max_retries` attribute is part of the adapter’s `__attrs__` list, so it is properly pickled and restored when the adapter is serialized.
+
+In summary, `HTTPAdapter` provides a simple integer or `Retry`-based interface for retry configuration, while the actual retry execution is delegated to urllib3’s `Retry` class during the `send` operation.
 
 ---
 
@@ -51,79 +84,72 @@ Here's a thinking process:
 
 **Answer:**
 
-Here's a thinking process:
+<think>
+We need to answer: "What is the structure of Session.request and how does it merge cookies?" based on the RAG context. The context includes snippets from requests sessions.py. We need to describe the structure of the Session.request method and how it merges cookies.
 
-1.  **Understand User Question:** The user is asking about the structure of `Session.request` in the `requests` library and how it merges cookies, based on the provided RAG context.
+From the context:
 
-2.  **Analyze RAG Context:**
-   - I need to look at the provided code snippets from `requests/sessions.py` and `requests/cookies.py`.
-   - Key snippets related to `Session.request`:
-     - Lines 501-530: Shows `self.adapters = OrderedDict(...)`, `__enter__`, `__exit__`, `prepare_request`, `PreparedRequest`, `url`, `cookies`, `Bootstrap CookieJar`, `isinstance cookies`, `cookiejar_from_dict`, `Merge session cookies`.
-     - Lines 521-550: Shows `url`, `cast`, `request`, `method`, `cookies`, `Bootstrap CookieJar`, `isinstance cookies dict`, `Merge session cookies`, `merged cookies`, `merge cookies`, `Set environment authentication`, `p = PreparedRequest`, `p.prepare(...)`, `method`, `url`, `files`, `data`, `json`, `headers`, `merge_setting`, `params`, `auth`, `cookies`, `hooks`.
-     - Lines 541-570: Shows `p.prepare(...)`, `method`, `url`, `files`, `data`, `json`, `headers`, `merge_setting`, `params`, `auth`, `cookies`, `hooks`, `return p`.
-     - Lines 561-590: Shows the signature of `Session.request`:
-       ```python
-       def request(
-           self,
-           method: str,
-           url: UriType,
-           params: _t[ParamsType] = None,
-           data: _t[DataType] = None,
-           headers: _t[HeadersType] = None,
-           cookies: _t[RequestsCookieJar | dict[str, str]] = None,
-           files: _t[FilesType] = None,
-           auth: _t[AuthType] = None,
-           timeout: _t[TimeoutType] = None,
-           allow_redirects: bool = True,
-           proxies: _t[ProxiesType] = None,
-           hooks: _t[HooksInputType] = None,
-           stream: bool = False,
-           verify: _t[VerifyType] = True,
-           cert: _t[CertType] = None,
-           json: _t[JsonType] = None,
-       ) -> Response:
-       ```
-     - Lines 501-530 & 521-550 describe the cookie merging logic:
-       - `cookies` parameter is handled.
-       - `if cookies is not None:` (implied by context)
-       - `if isinstance(cookies, dict):` -> `cookies = cookiejar_from_dict(cookies)`
-       - `merged_cookies = merge_cookies(self.cookies, cookies)`
-       - `p.prepare(..., cookies=merged_cookies, ...)`
-     - `merge_cookies` function is referenced. I should look at `requests/cookies.py` for `merge_cookies` if available, but the context only shows `merge_cookies` being called. Actually, line 601-625 shows `merge_cookies` implementation:
-       ```python
-       def merge_cookies(cookiejar, cookies):
-           # ...
-           if isinstance(cookies, dict):
-               cookies = cookiejar_from_dict(cookies)
-           # ...
-           for cookie_name, cookie_value in cookies.items():
-               cookiejar.set(cookie_name, cookie_value)
-           return cookiejar
-       ```
-       Wait, the context for 601-625 says:
-       ```python
-       def merge_cookies(cookiejar, cookies):
-           # ...
-           if isinstance(cookies, dict):
-               cookies = cookiejar_from_dict(cookies)
-           # ...
-           for cookie_name, cookie_value in cookies.items():
-               cookiejar.set(cookie_name, cookie_value)
-           return cookiejar
-       ```
-       Actually, the provided snippet for 601-625 is:
-       ```python
-       def merge_cookies(cookiejar, cookies):
-           # ...
-           if isinstance(cookies, dict):
-               cookies = cookiejar_from_dict(cookies)
-           # ...
-           for cookie_name, cookie_value in cookies.items():
-               cookiejar.set(cookie_name, cookie_value)
-           return cookiejar
-       ```
-       Let's stick strictly to what's in the context. The context says:
-       - `merge
+- File requests sessions.py (Lines 501-530): self adapters = OrderedDict(self mount(https, HTTPAdapter), self mount(http, HTTPAdapter)). Then enter, exit, close. Then prepare_request: Constructs PreparedRequest transmission returns settings merged Session requests url = cast cookies = request.cookies Bootstrap CookieJar isinstance cookies = cookiejar_from_dict( cookies Merge session cookies.
+
+- File requests sessions.py (Lines 521-550): url cast UriType request url method cast str cookies request Bootstrap CookieJar isinstance cookies dict Merge session cookies merged cookies merge cookies Set environment authentication set auth = request auth get_netrc_auth url p PreparedRequest p prepare method method upper url url files request files data request json headers merge_setting params merge_setting.
+
+- File requests sessions.py (Lines 101-130): python none keys = k for k, v merged setting items if v None key merged setting return merged merge_hooks HooksType - merges requests session hooks request hooks merge breaks Session hooks None return return merge_setting request SessionRedirectMixin : max_redirects : int trust_env : bool cookies : RequestsCookieJar.
+
+- File requests sessions.py (Lines 1-30): module provides object manage persist settings requests cookies auth proxies annotations sys time collections OrderedDict abc Generator Mapping MutableMapping datetime timedelta typing utils native string adapters auth basic auth compat cookielib urljoin urlparse cookies import RequestsCookieJar cookiejar extract cookies merge cookies exceptions import.
+
+- File requests sessions.py (Lines 541-570): python p prepare method method upper url url files request json headers merge_setting params merge_setting auth merge_setting cookies merged cookies hooks merge hooks return p request self method str url UriType params None cookies RequestsCookieJar dict str None None files FilesType None auth None timeout allow_redirects bool True proxies dict str None None hooks HooksInputType None None.
+
+- File requests sessions.py (Lines 421-450): python cert CertType max_redirects trust_env bool cookies RequestsCookieJar adapters MutableMapping str BaseAdapter attrs list headers cookies auth proxies hooks params verify cert adapters stream trust_env max_redirects init self case dictionary headers self headers default_headers Default Authentication tuple object attach auth None.
+
+- File requests sessions.py (Lines 561-590): params : _t ParamsType None data _t DataType None headers t None cookies RequestsCookieJar dict str files _t FilesType None auth t AuthType None timeout _t None allow_redirects bool proxies : dict str hooks _t HooksInputType stream : bool verify _t VerifyType cert _t json _t JsonType None Response Constructs class Request Request prepares sends Returns Response object param method object url Dictionary bytes query string list tuples bytes file object json HTTP Headers cookies Dict CookieJar.
+
+- File requests sessions.py (Lines 781-810): start preferred_clock Send request r adapter.send kwargs elapsed time elapsed preferred_clock start timedelta Response manipulation hooks dispatch_hook kwargs Persist cookies history history cookies resp extract_cookies_to_jar Resolve redirects redirects Redirect resolving generator gen resolve_redirects kwargs history = resp resp Shuffle history.
+
+- File requests cookies.py (Lines 601-625): python return cookiejar merge_cookies CookieJar dict str None Add cookies returns merged CookieJar param cookiejar object add rtype isinstance runtime guard raise ValueError merge into CookieJar isinstance cookies dict = cookiejar dict elif isinstance update_method getattr cookie_in_jar set cookie ( jar return cookiejar.
+
+We need to synthesize: The structure of Session.request method. It's a method that takes parameters like method, url, params, data, headers, cookies, files, auth, timeout, allow_redirects, proxies, hooks, stream, verify, cert, json, etc. It constructs a PreparedRequest, merges session cookies with request cookies, merges settings, etc.
+
+Specifically, how does it merge cookies? From the context: "Bootstrap CookieJar isinstance cookies = cookiejar_from_dict( cookies Merge session cookies". Also "merged cookies merge cookies". And from cookies.py: "return cookiejar merge_cookies CookieJar dict str None Add cookies returns merged CookieJar param cookiejar object add rtype isinstance runtime guard raise ValueError merge into CookieJar isinstance cookies dict = cookiejar dict elif isinstance update_method getattr cookie_in_jar set cookie ( jar return cookiejar". So it merges session cookies with request cookies by creating a CookieJar, then merging the cookies from the request (which could be a dict or CookieJar) into the session's cookie jar. The merge process: if cookies is a dict, it converts to CookieJar and merges; if it's a CookieJar, it merges. The merge likely adds cookies from the request to the session's cookie jar, with request cookies taking precedence? The context says "Bootstrap CookieJar isinstance cookies = cookiejar_from_dict( cookies Merge session cookies". So it bootstraps a CookieJar from the request's cookies (if dict) and then merges session cookies. The merge function in cookies.py: "return cookiejar merge_cookies CookieJar dict str None Add cookies returns merged CookieJar param cookiejar object add rtype isinstance runtime guard raise ValueError merge into CookieJar isinstance cookies dict = cookiejar dict elif isinstance update_method getattr cookie_in_jar set cookie ( jar return cookiejar". So it takes a cookiejar and a dict of cookies, and merges them into the cookiejar, returning the merged cookiejar. So the session's cookie jar is merged with the request's cookies (converted to a dict if needed). The merged cookies are then used for the request.
+
+Thus, the answer: Session.request method signature includes parameters: method, url, params=None, data=None, headers=None, cookies=None, files=None, auth=None, timeout=None, allow_redirects=True, proxies=None, hooks=None, stream=None, verify=None, cert=None, json=None. It constructs a PreparedRequest by merging session settings (cookies, headers, auth, etc.) with request-specific settings. For cookies: it takes the request's cookies (which can be a dict or a CookieJar), converts to a CookieJar if dict, then merges the session's cookies with the request's cookies, with request cookies taking precedence (or session cookies as base). The merged cookies are then attached to the PreparedRequest.
+
+We need to provide a clear, concise answer based on the context.
+
+</think>
+
+
+
+The `Session.request` method is the core entry point for making HTTP requests. Its signature (from the context) is:
+
+```python
+def request(
+    self,
+    method: str,
+    url: str,
+    params: dict | None = None,
+    data: dict | list | bytes | None = None,
+    headers: dict | None = None,
+    cookies: dict | CookieJar | None = None,
+    files: dict | None = None,
+    auth: tuple | None = None,
+    timeout: float | tuple | None = None,
+    allow_redirects: bool = True,
+    proxies: dict | None = None,
+    hooks: dict | None = None,
+    stream: bool | None = None,
+    verify: str | bool | None = None,
+    cert: str | tuple | None = None,
+    json: dict | None = None,
+) -> Response:
+```
+
+It constructs a `PreparedRequest` by merging session-level settings with request-specific overrides. The merging process for **cookies** works as follows:
+
+1. **Bootstrap a CookieJar** – If the `cookies` argument is a plain `dict`, it is converted into a `CookieJar` using `cookiejar_from_dict(cookies)`.  
+2. **Merge session cookies** – The session’s own cookie jar (stored in `self.cookies`) is merged with the request’s cookies. The merge is performed by the `merge_cookies` function (from `requests.cookies`), which takes a base `CookieJar` and a `dict` of cookies, and adds the request cookies into the base jar.  
+3. **Precedence** – Request cookies take precedence over session cookies. The merged `CookieJar` is then attached to the `PreparedRequest` via `p.cookies = merged_cookies`.
+
+In short, `Session.request` merges cookies by converting the request’s cookies (if a dict) to a `CookieJar`, then merging the session’s cookies with the request’s cookies, with the request’s cookies overriding any session cookies of the same name. The resulting merged cookie jar is used for the outgoing request.
 
 ---
 
@@ -131,50 +157,40 @@ Here's a thinking process:
 
 **Answer:**
 
-Here's a thinking process:
+<think>
+The user is asking two things:
+1. Where is the `PreparedRequest` class defined?
+2. What does its `prepare_auth` method do?
 
-1.  **Analyze User Question:**
-   - **Question 1:** Where is the `PreparedRequest` class defined?
-   - **Question 2:** What does its `prepare_auth` method do?
+From the RAG context:
+- `PreparedRequest` is defined in `requests/models.py` (Lines 361-390 and 441-470, etc.).
+- The `prepare_auth` method is defined in `requests/models.py` (Lines 661-690 and 681-710).
 
-2.  **Scan RAG Context for Keywords:**
-   - Keywords: `PreparedRequest`, `prepare_auth`, `class`, `def prepare_auth`
-   - Look at the provided chunks:
-     - `File requests models. py Lines 341 - 370`: Mentions `PreparedRequest Constructs transmission returns`
-     - `File requests models. py Lines 421 - 450`: `PreparedRequest Constructs transmission returns`, `prepare self method str url ... auth ( auth url last authentication schemes fully prepared request MUST prepare auth Authenticators add hook`
-     - `File requests models. py Lines 661 - 690`: `prepare _ auth AuthType Prepares HTTP auth data no Auth provided extract URL auth None url auth = get auth url cast isinstance auth tuple len auth = 2 ignore AuthType auth auth handler = HTTPBasicAuth auth fixed flipping conditionals auth _ handler = cast Callable PreparedRequest auth Allow auth changes`
-     - `File requests models. py Lines 681 - 710`: `auth isinstance auth tuple len auth = 2 type ignore arg - type pyright widens AuthType HTTP auth auth handler HTTPBasicAuth ignore arg AuthType fixed flipping conditionals auth handler cast Callable PreparedRequest auth auth changes r auth handler Update reflect auth changes Recompute Content Length prepare prepare cookies RequestsCookieJar Prepares HTTP cookie data function generates header cookies cookielib header regenerated once class PreparedRequest calls prepare cookies no effect Cookie header removed`
+I need to answer based on the provided code chunks.
 
-3.  **Synthesize Answers from Context:**
-   - **Where is `PreparedRequest` defined?**
-     - The context explicitly mentions `File requests models. py` multiple times in relation to `PreparedRequest`. Specifically, lines 341-370, 421-450, 661-690, 681-710 all reference it. So, it's defined in `requests/models.py`.
-   - **What does `prepare_auth` do?**
-     - From lines 661-690: `prepare _ auth AuthType Prepares HTTP auth data no Auth provided extract URL auth None url auth = get auth url cast isinstance auth tuple len auth = 2 ignore AuthType auth auth handler = HTTPBasicAuth auth fixed flipping conditionals auth _ handler = cast Callable PreparedRequest auth Allow auth changes`
-     - From lines 681-710: `auth handler cast Callable PreparedRequest auth auth changes r auth handler Update reflect auth changes`
-     - The method prepares HTTP authentication data. If no auth is provided, it extracts URL auth. It handles different auth types (like HTTPBasicAuth), casts them to a callable, and applies them to the request. It allows auth changes and updates the request headers accordingly.
-     - Let's reconstruct the likely actual code logic based on the fragmented context:
-       - `prepare_auth` prepares HTTP authentication data.
-       - If no auth is provided, it extracts URL auth.
-       - It checks if auth is a tuple (username, password) and wraps it in `HTTPBasicAuth`.
-       - It casts the auth handler to a callable.
-       - It calls the auth handler on the request (`auth(r)`), allowing auth changes.
-       - It updates the request to reflect auth changes.
+Let's extract the relevant information:
+- `PreparedRequest` is defined in `requests/models.py`.
+- The `prepare_auth` method (Lines 661-690) prepares HTTP auth data. It:
+  - If auth is None, extracts it from the URL first.
+  - If auth is a tuple of length 2, it creates an HTTPBasicAuth handler.
+  - Otherwise, it casts auth to a callable.
+  - Then it calls the auth handler with the prepared request, updates the request's dict with the handler's changes, and recomputes Content-Length.
 
-4.  **Formulate Response:**
-   - State clearly where `PreparedRequest` is defined: `requests/models.py`.
-   - Explain what `prepare_auth` does based on the context:
-     - Prepares HTTP authentication data for the request.
-     - Handles cases where no auth is provided by extracting URL auth.
-     - Supports tuple authentication (username, password) by automatically wrapping it in `HTTPBasicAuth`.
-     - Casts the auth handler to a callable and applies it to the prepared request.
-     - Allows for auth changes and updates the request headers accordingly.
-   - Keep it concise and directly answer both parts.
-   - Verify against the provided context to ensure accuracy. The context explicitly says: `prepare _ auth AuthType Prepares HTTP auth data`, `no Auth provided extract URL auth`, `isinstance auth tuple len auth = 2 ... auth handler = HTTPBasicAuth`, `cast Callable PreparedRequest auth`, `Allow auth changes`, `Update reflect auth changes`.
-   - All points match. I will structure the answer clearly.
+I'll formulate a concise answer.
 
-   Draft:
-   Based on the provided code context:
-   - **Definition Location:** The
+</think>
+
+
+
+The `PreparedRequest` class is defined in **`requests/models.py`** (lines 361–390 and 441–470).
+
+Its `prepare_auth` method (lines 661–690) prepares HTTP authentication data by:
+
+1. **Extracting credentials from the URL** if no explicit `auth` is provided.
+2. **Handling basic auth** – if `auth` is a 2-tuple `(username, password)`, it wraps it in an `HTTPBasicAuth` handler.
+3. **Applying the auth handler** – it calls the handler with the prepared request, updates the request’s attributes with the handler’s changes, and recomputes the `Content-Length` header.
+
+This ensures that authentication is applied correctly before the request is sent, and that any changes made by the auth handler (e.g., adding an `Authorization` header) are reflected in the final request.
 
 ---
 

@@ -94,14 +94,14 @@ def run_rag_and_generate(query: str):
         "model": MODEL_NAME,
         "messages": messages,
         "temperature": 0.1,
-        "max_tokens": 1000
+        "max_tokens": 3000
     }
     
     profiler.start()
     t1 = time.time()
     
     try:
-        res = requests.post(VLLM_URL, json=payload, timeout=90)
+        res = requests.post(VLLM_URL, json=payload, timeout=300)
         res.raise_for_status()
         resp = res.json()
         generation_latency = time.time() - t1
