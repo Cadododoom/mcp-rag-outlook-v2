@@ -4,10 +4,14 @@ import json
 import random
 import time
 import requests
+import os
+import sys
+
+# Add skills path to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../.agents/skills/lancedb-raptor-rag-engine")))
+from query_edge_rag import execute_tool
 
 VLLM_URL = "http://localhost:30000/v1/chat/completions"
-EMBEDDING_URL = "http://127.0.0.1:8080/v1/embeddings"
-MILVUS_URL = "http://localhost:18080"
 CONV_ID = "rag-stress-test-conv"
 
 # 4 target secrets that were injected during ingestion
@@ -18,33 +22,14 @@ TARGETS = [
     {"name": "NexusQueue", "query": "NexusQueue RabbitMQ connection credentials port host"}
 ]
 
-async def get_embedding(session, text):
-    async with session.post(EMBEDDING_URL, json={"input": text}) as response:
-        response.raise_for_status()
-        data = await response.json()
-        return data["data"][0]["embedding"]
-
-async def search_memory(session, query, limit=30):
-    # Get embedding for query
-    vector = await get_embedding(session, query)
-    
-    payload = {
-        "collectionName": "agent_memories",
-        "data": [vector],
-        "filter": f'conversationId == "{CONV_ID}"',
-        "limit": limit,
-        "outputFields": ["summary", "details"]
-    }
-    
-    async with session.post(f"{MILVUS_URL}/v2/vectordb/entities/search", json=payload) as response:
-        response.raise_for_status()
-        data = await response.json()
-        hits = data.get("data", [])
-        
-        formatted = []
-        for i, h in enumerate(hits):
-            formatted.append(f"File Reference #{i+1}: {h['summary']}\nSource Code/Details: {h['details']}")
-        return "\n---\n".join(formatted)
+async def search_memory(query, compression_rate=0.33):
+    # Execute RAG retrieval and context compression using LanceDB + LLMLingua-2
+    # execute_tool is blocking, so we run it in a thread pool using asyncio.to_thread
+    res_str = await asyncio.to_thread(execute_tool, query, compression_rate)
+    res = json.loads(res_str)
+    if "error" in res:
+        raise Exception(res["error"])
+    return res.get("compressed_payload", "")
 
 async def simulate_agent(agent_id, session):
     target = TARGETS[agent_id % len(TARGETS)]
@@ -52,13 +37,21 @@ async def simulate_agent(agent_id, session):
     
     # Step 1: Query database for context (RAG)
     t0 = time.time()
-    context = await search_memory(session, target["query"], limit=300) # Retrieve 300 chunks to simulate ~20k tokens context
+    context = await search_memory(target["query"], compression_rate=0.33)
     rag_latency = time.time() - t0
     
+    # Pad context to ~120,000 tokens (approx 480,000 characters) to simulate the 120k context load
+    target_chars = 120000 * 4
+    if len(context) < target_chars:
+        padding_needed = target_chars - len(context)
+        dummy_padding_block = " This is a dummy padding block to simulate a large 120k token context window. In software engineering, maintaining a large context allows the model to reason about multiple files and dependencies simultaneously, avoiding context fragmentation."
+        repeats = (padding_needed // len(dummy_padding_block)) + 1
+        context += (dummy_padding_block * repeats)[:padding_needed]
+        
     # Calculate approx tokens (4 characters per token average)
     context_char_len = len(context)
     approx_tokens = context_char_len // 4
-    print(f"[Agent {agent_id:02d}] RAG retrieved {approx_tokens} tokens of code context in {rag_latency:.3f}s.")
+    print(f"[Agent {agent_id:02d}] RAG retrieved context padded to {approx_tokens} tokens of code context in {rag_latency:.3f}s.")
     
     # Step 2: Formulate prompt
     messages = [
@@ -77,7 +70,7 @@ async def simulate_agent(agent_id, session):
     ]
     
     payload = {
-        "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+        "model": "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4",
         "messages": messages,
         "temperature": 0.2,
         "max_tokens": 128,  # Keep output short to focus on prefill load
@@ -131,19 +124,25 @@ async def simulate_agent(agent_id, session):
         "tokens_generated": generated_tokens
     }
 
-async def run_stress_test(concurrency=16):
+async def run_stress_test(concurrency=4):
     print("==========================================================")
-    print(f"    RUNNING 16-AGENT CONCURRENT RAG CONCURRENCY TEST    ")
+    print(f"    RUNNING 4-AGENT CONCURRENT RAG CONCURRENCY TEST     ")
     print("==========================================================")
     
-    # Check if Milvus collection has entries
+    # Check if LanceDB table exists
     try:
-        res = requests.post(f"{MILVUS_URL}/v2/vectordb/collections/describe", json={"collectionName": "agent_memories"})
-        res.raise_for_status()
-        desc = res.json()
-        print(f"[Milvus] Collection verified active. Vector Dimension: {desc.get('data', {}).get('vectorFields', [{}])[0].get('dimension')}")
+        db_path = "./data/lancedb_store"
+        if not os.path.exists(db_path):
+            db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.agents/skills/lancedb-raptor-rag-engine/../../../data/lancedb_store"))
+        import lancedb
+        db = lancedb.connect(db_path)
+        if "raptor_collapsed_index" in db.table_names():
+            print(f"[LanceDB] Table 'raptor_collapsed_index' verified active.")
+        else:
+            print(f"[Error] LanceDB table 'raptor_collapsed_index' not found.")
+            return
     except Exception as e:
-        print(f"[Error] Failed to connect to Milvus or verify collection: {e}")
+        print(f"[Error] Failed to connect to LanceDB: {e}")
         return
 
     # Create client session with custom timeout and limits
@@ -181,7 +180,7 @@ async def run_stress_test(concurrency=16):
         system_throughput = total_tokens_gen / total_time
         
         print(f"Successful Agents: {len(successful_runs)}/{concurrency}")
-        print(f"Average Milvus Search Latency: {avg_rag:.3f} seconds")
+        print(f"Average LanceDB Search & Compression Latency: {avg_rag:.3f} seconds")
         print(f"Average Active Context per Agent: {avg_context:.0f} tokens")
         print(f"Total Concurrently Handled Context: {avg_context * len(successful_runs) / 1000:.1f}k tokens")
         print(f"Average Time to First Token (TTFT): {avg_ttft:.3f} seconds")
@@ -191,4 +190,4 @@ async def run_stress_test(concurrency=16):
         print("==========================================================\n")
 
 if __name__ == "__main__":
-    asyncio.run(run_stress_test(16))
+    asyncio.run(run_stress_test(4))

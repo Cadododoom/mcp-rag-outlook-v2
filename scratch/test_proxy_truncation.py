@@ -26,7 +26,7 @@ def main():
     messages = [system_msg, old_msg, recent_msg]
     
     payload = {
-        "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+        "model": "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4",
         "messages": messages,
         "temperature": 0.1,
         "max_tokens": 10

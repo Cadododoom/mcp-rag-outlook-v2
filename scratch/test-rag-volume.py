@@ -170,7 +170,7 @@ def run_volume_test():
     # 4. First LLM Query
     print("\n[Step 2] Querying vLLM to analyze request...")
     payload = {
-        "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+        "model": "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4",
         "messages": messages,
         "tools": tools,
         "tool_choice": "auto",

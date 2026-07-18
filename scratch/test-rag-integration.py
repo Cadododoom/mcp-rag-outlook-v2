@@ -1,95 +1,36 @@
+import os
+import sys
 import requests
 import json
-import random
 import time
 
 VLLM_URL = "http://localhost:30000/v1/chat/completions"
-EMBEDDING_URL = "http://localhost:8080/v1/embeddings"
-MILVUS_URL = "http://localhost:18080"
-CONV_ID = "rag-integration-test-conv"
+VLLM_HEADERS = {"Authorization": "Bearer vllm-5060ti-token"}
 
-# Helper to get embeddings from llama.cpp container
-def get_embedding(text):
-    res = requests.post(EMBEDDING_URL, json={"input": text})
-    res.raise_for_status()
-    return res.json()["data"][0]["embedding"]
-
-# Helper to insert memory into Milvus
-def insert_memory(summary, details):
-    vector = get_embedding(summary)
-    payload = {
-        "collectionName": "agent_memories",
-        "data": [
-            {
-                "id": random.randint(1000000000, 9999999999),
-                "vector": vector,
-                "conversationId": CONV_ID,
-                "summary": summary,
-                "details": details,
-                "timestamp": int(time.time() * 1000)
-            }
-        ]
-    }
-    res = requests.post(f"{MILVUS_URL}/v2/vectordb/entities/insert", json=payload)
-    res.raise_for_status()
-    print(f"[Memory DB] Successfully stored: '{summary}'")
-
-# Helper to search memories in Milvus
-def search_memory(query, limit=3):
-    vector = get_embedding(query)
-    payload = {
-        "collectionName": "agent_memories",
-        "data": [vector],
-        "filter": f'conversationId == "{CONV_ID}"',
-        "limit": limit,
-        "outputFields": ["summary", "details", "timestamp"]
-    }
-    res = requests.post(f"{MILVUS_URL}/v2/vectordb/entities/search", json=payload)
-    res.raise_for_status()
-    hits = res.json().get("data", [])
-    
-    if not hits:
-        return "No matching memories found."
-    
-    formatted = []
-    for i, h in enumerate(hits):
-        formatted.append(f"[Past Memory {i+1}] Summary: {h['summary']}\nDetails: {h['details']}")
-    return "\n---\n".join(formatted)
+# Add skills path to sys.path
+skills_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.agents/skills/lancedb-raptor-rag-engine"))
+sys.path.append(skills_path)
+from query_edge_rag import execute_tool
 
 def run_test():
     print("==========================================================")
-    # 1. Populate RAG database with test facts
-    print("[Step 1] Populating Milvus database with project milestones...")
-    try:
-        insert_memory(
-            summary="Postgres connection credentials configured",
-            details="Database URL: postgresql://postgres:auth-key-9988@localhost:5432/production_db"
-        )
-        insert_memory(
-            summary="Auth API Secret configuration details",
-            details="JWT Token signing key: jwt-secret-string-alpha-beta-12345"
-        )
-        insert_memory(
-            summary="Framework choice and setup decisions",
-            details="Project is written in Node.js using Fastify and TypeORM for postgres connection."
-        )
-    except Exception as e:
-        print(f"Failed to populate database: {e}")
-        return
+    print("[Step 1] Verifying database population...")
+    # LanceDB was populated using populate_lancedb.py
+    print("LanceDB store should be populated via populate_lancedb.py.")
 
     # 2. Formulate tool schemas for vLLM
     tools = [
         {
             "type": "function",
             "function": {
-                "name": "retrieve_chat_memory",
-                "description": "Query the agent's long-term memory vector database for past facts, setup configurations, or milestones.",
+                "name": "query_edge_rag",
+                "description": "Query the local high-efficiency RAG engine to retrieve context from LanceDB, rerank, and compress prompts.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Semantic query describing what memory fact to retrieve."
+                            "description": "The search query to retrieve relevant facts."
                         }
                     },
                     "required": ["query"]
@@ -104,7 +45,7 @@ def run_test():
             "role": "system",
             "content": (
                 "You are an AI coding assistant. Your working context length is limited. "
-                "You have access to a tool `retrieve_chat_memory` to fetch past configurations and decisions "
+                "You have access to a tool `query_edge_rag` to fetch past configurations and decisions "
                 "from your database. Use this tool if you need database URLs, JWT keys, or framework decisions."
             )
         },
@@ -117,7 +58,7 @@ def run_test():
     # 4. Query vLLM
     print("\n[Step 2] Sending initial prompt to vLLM (TP=2, Qwen 35B)...")
     payload = {
-        "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+        "model": "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4",
         "messages": messages,
         "tools": tools,
         "tool_choice": "auto",
@@ -125,7 +66,7 @@ def run_test():
     }
     
     try:
-        res = requests.post(VLLM_URL, json=payload)
+        res = requests.post(VLLM_URL, json=payload, headers=VLLM_HEADERS)
         res.raise_for_status()
         response_json = res.json()
         choice = response_json["choices"][0]
@@ -146,10 +87,18 @@ def run_test():
     query = tool_args["query"]
     print(f"  Query Parameter: '{query}'")
 
-    # 6. Execute RAG search in Milvus
-    print("\n[Step 4] Querying vector database semantically...")
-    retrieved_context = search_memory(query)
-    print(f"[RAG Retrieved Context]:\n{retrieved_context}")
+    # 6. Execute RAG search using query_edge_rag
+    print("\n[Step 4] Querying vector database semantically and compressing prompt...")
+    # Execute tool
+    result_str = execute_tool(query, compression_rate=0.33)
+    print(f"[RAG Retrieved/Compressed Result]:\n{result_str}")
+
+    # Parse payload from the tool result
+    try:
+        result_json = json.loads(result_str)
+        retrieved_context = result_json.get("compressed_payload", "")
+    except Exception:
+        retrieved_context = result_str
 
     # 7. Feed tool result back to vLLM
     print("\n[Step 5] Feeding tool results back to vLLM for final generation...")
@@ -158,7 +107,7 @@ def run_test():
     messages.append({
         "role": "tool",
         "tool_call_id": tool_calls[0]["id"],
-        "name": "retrieve_chat_memory",
+        "name": "query_edge_rag",
         "content": retrieved_context
     })
 
@@ -168,7 +117,7 @@ def run_test():
     del payload["tool_choice"]
 
     try:
-        res = requests.post(VLLM_URL, json=payload)
+        res = requests.post(VLLM_URL, json=payload, headers=VLLM_HEADERS)
         res.raise_for_status()
         final_response = res.json()["choices"][0]["message"]["content"]
         print("\n================ [FINAL LLM ROUTE HANDLER CODE] ================")

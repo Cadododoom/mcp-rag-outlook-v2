@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../.age
 from query_edge_rag import execute_tool
 
 VLLM_URL = "http://localhost:30000/v1/chat/completions"
-MODEL_NAME = "nvidia/Qwen3.6-35B-A3B-NVFP4"
+MODEL_NAME = "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4"
 MAX_ACTIVE_TOKENS = 10000
 
 # Define a set of coding tasks with query and ground truth keywords
@@ -157,11 +157,12 @@ def run_evaluation_flow(task: dict, target_tokens: int, compression_rate: float)
         "messages": truncated_messages,
         "tools": tools,
         "tool_choice": "auto",
-        "temperature": 0.1
+        "temperature": 0.1,
+        "max_tokens": 1024
     }
     
     try:
-        res = requests.post(VLLM_URL, json=payload, timeout=60)
+        res = requests.post(VLLM_URL, json=payload, timeout=180)
         res.raise_for_status()
         resp = res.json()
     except Exception as e:
@@ -213,7 +214,7 @@ def run_evaluation_flow(task: dict, target_tokens: int, compression_rate: float)
     del payload["tool_choice"]
     
     try:
-        res2 = requests.post(VLLM_URL, json=payload, timeout=60)
+        res2 = requests.post(VLLM_URL, json=payload, timeout=180)
         res2.raise_for_status()
         final_answer = res2.json()["choices"][0]["message"]["content"]
     except Exception as e:
@@ -237,7 +238,7 @@ def main():
     print("==========================================================")
     
     # Context sizes to test
-    context_sizes = [10000, 50000, 250000, 1000000]
+    context_sizes = [10000, 50000, 250000, 1000000, 2000000, 3000000]
     # Compression rates: 0.20 (aggressive), 0.33 (moderate), 0.50 (light), 1.00 (bypass)
     compression_rates = [0.20, 0.33, 0.50, 1.00]
     

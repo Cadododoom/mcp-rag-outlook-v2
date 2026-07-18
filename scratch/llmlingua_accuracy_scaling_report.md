@@ -6,22 +6,30 @@ This report tracks the model's accuracy on code-related questions. A score of 10
 
 | Context Size | Compression Rate | Tool Call Rate | Avg Correctness Score | Accuracy Status |
 | :--- | :--- | :--- | :--- | :--- |
-| 10,000 | 0.20 | 100% | 81.33% | 🟡 Good (Minor Details Lost) |
-| 10,000 | 0.33 | 100% | 92.67% | 🟢 Excellent (No Blind Spots) |
-| 10,000 | 0.50 | 100% | 89.33% | 🟡 Good (Minor Details Lost) |
-| 10,000 | 1.00 (Bypass) | 100% | 80.00% | 🟡 Good (Minor Details Lost) |
-| 50,000 | 0.20 | 100% | 77.33% | 🟡 Good (Minor Details Lost) |
-| 50,000 | 0.33 | 100% | 89.33% | 🟡 Good (Minor Details Lost) |
-| 50,000 | 0.50 | 100% | 86.67% | 🟡 Good (Minor Details Lost) |
-| 50,000 | 1.00 (Bypass) | 100% | 83.33% | 🟡 Good (Minor Details Lost) |
-| 250,000 | 0.20 | 100% | 80.67% | 🟡 Good (Minor Details Lost) |
-| 250,000 | 0.33 | 100% | 80.67% | 🟡 Good (Minor Details Lost) |
-| 250,000 | 0.50 | 100% | 96.67% | 🟢 Excellent (No Blind Spots) |
-| 250,000 | 1.00 (Bypass) | 100% | 96.67% | 🟢 Excellent (No Blind Spots) |
-| 1,000,000 | 0.20 | 100% | 82.00% | 🟡 Good (Minor Details Lost) |
-| 1,000,000 | 0.33 | 100% | 92.00% | 🟢 Excellent (No Blind Spots) |
-| 1,000,000 | 0.50 | 100% | 86.00% | 🟡 Good (Minor Details Lost) |
-| 1,000,000 | 1.00 (Bypass) | 100% | 89.33% | 🟡 Good (Minor Details Lost) |
+| 10,000 | 0.20 | 100% | 38.00% | 🔴 Poor (Significant Blind Spots) |
+| 10,000 | 0.33 | 100% | 24.00% | 🔴 Poor (Significant Blind Spots) |
+| 10,000 | 0.50 | 100% | 17.33% | 🔴 Poor (Significant Blind Spots) |
+| 10,000 | 1.00 (Bypass) | 100% | 17.33% | 🔴 Poor (Significant Blind Spots) |
+| 50,000 | 0.20 | 100% | 25.33% | 🔴 Poor (Significant Blind Spots) |
+| 50,000 | 0.33 | 100% | 14.00% | 🔴 Poor (Significant Blind Spots) |
+| 50,000 | 0.50 | 100% | 40.67% | 🔴 Poor (Significant Blind Spots) |
+| 50,000 | 1.00 (Bypass) | 100% | 34.67% | 🔴 Poor (Significant Blind Spots) |
+| 250,000 | 0.20 | 100% | 46.00% | 🔴 Poor (Significant Blind Spots) |
+| 250,000 | 0.33 | 100% | 39.33% | 🔴 Poor (Significant Blind Spots) |
+| 250,000 | 0.50 | 100% | 21.33% | 🔴 Poor (Significant Blind Spots) |
+| 250,000 | 1.00 (Bypass) | 80% | 38.00% | 🔴 Poor (Significant Blind Spots) |
+| 1,000,000 | 0.20 | 100% | 27.33% | 🔴 Poor (Significant Blind Spots) |
+| 1,000,000 | 0.33 | 100% | 34.67% | 🔴 Poor (Significant Blind Spots) |
+| 1,000,000 | 0.50 | 100% | 23.33% | 🔴 Poor (Significant Blind Spots) |
+| 1,000,000 | 1.00 (Bypass) | 100% | 13.33% | 🔴 Poor (Significant Blind Spots) |
+| 2,000,000 | 0.20 | 100% | 14.00% | 🔴 Poor (Significant Blind Spots) |
+| 2,000,000 | 0.33 | 100% | 30.67% | 🔴 Poor (Significant Blind Spots) |
+| 2,000,000 | 0.50 | 100% | 31.33% | 🔴 Poor (Significant Blind Spots) |
+| 2,000,000 | 1.00 (Bypass) | 100% | 17.33% | 🔴 Poor (Significant Blind Spots) |
+| 3,000,000 | 0.20 | 100% | 27.33% | 🔴 Poor (Significant Blind Spots) |
+| 3,000,000 | 0.33 | 100% | 25.33% | 🔴 Poor (Significant Blind Spots) |
+| 3,000,000 | 0.50 | 100% | 21.33% | 🔴 Poor (Significant Blind Spots) |
+| 3,000,000 | 1.00 (Bypass) | 100% | 34.67% | 🔴 Poor (Significant Blind Spots) |
 
 ## Analysis of Semantic Blind Spots
 

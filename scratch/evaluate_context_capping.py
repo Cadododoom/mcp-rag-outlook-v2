@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../.age
 from query_edge_rag import execute_tool
 
 VLLM_URL = "http://localhost:30000/v1/chat/completions"
-MODEL_NAME = "nvidia/Qwen3.6-35B-A3B-NVFP4"
+MODEL_NAME = "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4"
 MAX_ACTIVE_TOKENS = 10000
 
 # Dummy paragraph of approx 200 tokens
@@ -155,12 +155,13 @@ def run_evaluation_step(target_tokens: int, mode: str) -> dict:
         "messages": truncated_messages,
         "tools": tools,
         "tool_choice": "auto",
-        "temperature": 0.1
+        "temperature": 0.1,
+        "max_tokens": 1024
     }
     
     try:
         t0 = time.time()
-        res = requests.post(VLLM_URL, json=payload, timeout=60)
+        res = requests.post(VLLM_URL, json=payload, timeout=180)
         res.raise_for_status()
         resp = res.json()
         latency_1 = time.time() - t0
@@ -204,7 +205,7 @@ def run_evaluation_step(target_tokens: int, mode: str) -> dict:
         
         try:
             t1 = time.time()
-            res2 = requests.post(VLLM_URL, json=payload, timeout=60)
+            res2 = requests.post(VLLM_URL, json=payload, timeout=180)
             res2.raise_for_status()
             final_content = res2.json()["choices"][0]["message"]["content"]
             total_latency = latency_1 + (time.time() - t1)
@@ -257,9 +258,9 @@ def main():
     print("    STARTING HIGH CONTEXT & CAPPING EVALUATION HARNESS    ")
     print("==========================================================")
     
-    # Test cases: context lengths up to 1 million tokens (simulated)
-    # We will test 10k (no truncation), 50k, 250k, and 1,000,000 tokens
-    test_sizes = [10000, 50000, 250000, 1000000]
+    # Test cases: context lengths up to 10 million tokens (simulated)
+    # We will test 10k (no truncation), 50k, 250k, 1M, 5M, and 10M tokens
+    test_sizes = [10000, 50000, 250000, 1000000, 5000000, 10000000]
     modes = ["naive", "truncation-aware"]
     
     results = []

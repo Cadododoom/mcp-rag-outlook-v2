@@ -14,7 +14,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = target_threads
 # Import torch to limit thread count programmatically
 try:
     import torch
-    torch.set_num_threads(int(target_threads))
+    torch.set_num_threads(4) # Cap Torch threads to 4 threads (1/8th of physical cores)
     torch.set_num_interop_threads(1)
 except ImportError:
     pass
@@ -23,10 +23,15 @@ import lancedb
 import onnxruntime as ort
 import json
 from llmlingua import PromptCompressor
+from transformers import AutoTokenizer
+import numpy as np
 
 _compressor = None
+_tokenizer = None
+_session = None
 
 def execute_tool(query: str, compression_rate: float = 0.33) -> str:
+    global _compressor, _tokenizer, _session
     try:
         # 1. Connect to local disk-backed LanceDB with RaBitQ quantization
         db_path = "./data/lancedb_store"
@@ -50,12 +55,10 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
             # Fallback if table doesn't exist yet
             documents = ["No documents found. LanceDB table 'raptor_collapsed_index' is not populated yet."]
             
+        if not documents:
+            documents = ["No documents found in LanceDB table 'raptor_collapsed_index'."]
+
         # 2. Re-rank retrieved candidates using CPU-optimized INT8 ONNX cross-encoder
-        providers = ['CPUExecutionProvider']
-        sess_options = ort.SessionOptions()
-        sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-        sess_options.intra_op_num_threads = 2
-        
         # Bind process to specific CPU cores if supported to prevent thread contention under high concurrency (32 agents)
         try:
             if hasattr(os, "sched_setaffinity"):
@@ -67,21 +70,56 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
                 os.sched_setaffinity(0, {core1, core2})
         except Exception:
             pass
+
+        # Lazy load tokenizer
+        if _tokenizer is None:
+            model_dir = "./models/bge_reranker_onnx/"
+            if not os.path.exists(model_dir):
+                model_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../models/bge_reranker_onnx/"))
+            try:
+                _tokenizer = AutoTokenizer.from_pretrained(model_dir, fix_mistral_regex=True)
+            except TypeError:
+                _tokenizer = AutoTokenizer.from_pretrained(model_dir)
+
+        # Lazy load ONNX session
+        if _session is None:
+            providers = ['CPUExecutionProvider']
+            sess_options = ort.SessionOptions()
+            sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            sess_options.intra_op_num_threads = 2
             
-        # Initialize ONNX Reranker Session
-        reranker_path = "./models/bge_reranker_onnx/model.onnx"
-        if not os.path.exists(reranker_path):
-            reranker_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../models/bge_reranker_onnx/model.onnx"))
-            
-        session = ort.InferenceSession(reranker_path, sess_options, providers=providers)
+            reranker_path = "./models/bge_reranker_onnx/model.onnx"
+            if not os.path.exists(reranker_path):
+                reranker_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../models/bge_reranker_onnx/model.onnx"))
+            _session = ort.InferenceSession(reranker_path, sess_options, providers=providers)
         
         # Scoring pipeline
         scored_docs = []
-        for doc in documents:
-            # Simulated cross-encoder score representing raw output:
-            score = 0.85 # Placeholder representing runtime cross-attention score
-            scored_docs.append((doc, score))
+        if len(documents) > 0 and documents != ["No documents found. LanceDB table 'raptor_collapsed_index' is not populated yet."]:
+            # Tokenize query-document pairs
+            pairs = [(query, doc) for doc in documents]
+            encoded = _tokenizer(
+                pairs,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="np"
+            )
             
+            # Prepare inputs for ONNX session
+            onnx_inputs = {
+                "input_ids": encoded["input_ids"].astype("int64"),
+                "attention_mask": encoded["attention_mask"].astype("int64")
+            }
+            
+            # Run ONNX inference
+            logits = _session.run(None, onnx_inputs)[0]
+            # logits shape is (batch_size, 1)
+            scores = np.atleast_1d(logits.squeeze(-1)).tolist()
+            scored_docs = list(zip(documents, scores))
+        else:
+            scored_docs = [(doc, 0.0) for doc in documents]
+
         # Sort documents based on scores
         scored_docs.sort(key=lambda x: x[1], reverse=True)
         top_k_docs = [item[0] for item in scored_docs[:15]]
@@ -102,8 +140,7 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
             })
             
         # Initialize PromptCompressor lazily and cache it
-        global _compressor
-        if "_compressor" not in globals() or _compressor is None:
+        if _compressor is None:
             _compressor = PromptCompressor(
                 model_name="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
                 device_map="cpu",

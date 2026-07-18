@@ -156,7 +156,7 @@ def run_benchmark():
     # 5. Send payload through proxy
     print("[4/5] Sending 30k token payload through proxy to vLLM (Streaming)...")
     payload = {
-        "model": "nvidia/Qwen3.6-35B-A3B-NVFP4",
+        "model": "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4",
         "messages": messages,
         "tools": tools,
         "tool_choice": "auto",

@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../.age
 from query_edge_rag import execute_tool
 
 VLLM_URL = "http://localhost:30000/v1/chat/completions"
-MODEL_NAME = "nvidia/Qwen3.6-35B-A3B-NVFP4"
+MODEL_NAME = "Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4"
 
 # Thread to measure CPU utilization in the background during execution
 class CPUProfiler:
