@@ -116,15 +116,15 @@
       "type": "local",
       "command": [
         "node",
-        "C:/Users/jeffr/.gemini/antigravity/scratch/mcp-rag-outlook/mcp_server/launch-mcp.js"
+        "/home/theworks/.gemini/antigravity/scratch/mcp-rag-outlook/mcp_server/launch-mcp.js"
       ],
       "enabled": true
     },
     "memory-manager": {
       "type": "local",
       "command": [
-        "node",
-        "C:/Users/jeffr/.gemini/antigravity/scratch/mcp-rag-outlook/mcp_server/launch-memory-mcp.js"
+        "/home/theworks/.hermes/lancedb_venv/bin/python",
+        "/home/theworks/.gemini/antigravity/scratch/mcp-rag-outlook/mcp_server/launch-memory-mcp.py"
       ],
       "enabled": true
     }
