@@ -15,9 +15,7 @@ EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 # Initialize LanceDB
 db_path = os.getenv("LANCE_DB_PATH")
 if not db_path:
-    db_path = "/app/data/lancedb_store"
-    if not os.path.exists("/app") or not os.access(os.path.dirname(db_path), os.W_OK):
-        db_path = "./data/lancedb_store"
+    db_path = "/home/theworks/.hermes/data/lancedb_store"
 
 os.makedirs(os.path.dirname(db_path), exist_ok=True)
 db = lancedb.connect(db_path)
