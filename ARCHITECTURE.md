@@ -1,4 +1,4 @@
-# Version 1.1 System Architecture and Configuration Documentation
+# Version 1.2 System Architecture and Configuration Documentation
 ## AI Workstation Backup Repository
 
 This document details the system architecture, component configurations, retrieval-augmented generation (RAG) pipeline, and performance characteristics of the Multi-Agent RAG system calibrated for the AI Workstation stack, as well as the backup layout and operational management.
@@ -124,6 +124,7 @@ A frameless desktop overlay widget implemented in python (Tkinter) that provides
 *   **Visual Status:** Displays active panels representing current conversations, tracking physical context usage (with color-coded limits) and virtual RAG context size.
 *   **Fast/Huge Toggle Button:** A styled button mapped to the Catppuccin Mocha theme (Green `#a6e3a1` for Fast, Mauve `#cba6f7` for Huge) that updates configurations on click.
 *   **Configuration Sync:** On click, the widget programmatically writes limits to three YAML configurations (Hermes active, Hermes backup, Swarm shared backup) and two JSON configurations (OpenCode active, OpenCode backup).
+*   **Decay & Active Session Persistence (Version 1.2):** Retains running/unfinished sessions (where `ended_at IS NULL` in the database) persistently active on the overlay panel regardless of age. Completed sessions (where `ended_at` is set) are subject to a 5-minute (300 seconds) decay window from the session's completion or last activity time, after which they are automatically filtered out to prevent clutter.
 
 ---
 
