@@ -1,7 +1,7 @@
-# Version 1.0 System Architecture and Configuration Documentation
-## MCP RAG Outlook v2 Repository
+# Version 1.1 System Architecture and Configuration Documentation
+## AI Workstation Backup Repository
 
-This document details the system architecture, component configurations, retrieval-augmented generation (RAG) pipeline, and performance characteristics of the Multi-Agent RAG system calibrated for the AI Workstation stack.
+This document details the system architecture, component configurations, retrieval-augmented generation (RAG) pipeline, and performance characteristics of the Multi-Agent RAG system calibrated for the AI Workstation stack, as well as the backup layout and operational management.
 
 ---
 
@@ -107,6 +107,15 @@ The proxy acts as a reverse proxy on host port `30000`, intercepting completion 
 *   **Truncation Alert Injection:** Injecting the following warning in the last user message to instruct the model to trigger RAG instead of hallucinating:
     > `[SYSTEM WARNING]: The older conversation history has been truncated from your active memory to maintain performance. If you require details regarding previous code milestones, authentication tokens, database connection credentials, or architectural design decisions that are not visible in the recent messages above, you MUST call the 'retrieve_chat_memory' tool to search the database. Do not attempt to guess or invent these details.`
 *   **Reasoning Reassembly:** Re-constructs reasoning tokens in `<think>...</think>` tags for clients that do not support raw reasoning field streaming.
+*   **Dynamic Model Parameter Calibration (Version 1.1):** Intercepts completions requests to enforce calibrated model parameters optimized per Unsloth's official specifications for thinking/reasoning and fast/non-thinking variants:
+    | Parameter | Thinking Model (`Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4`) | Fast Model (`Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4-Fast`) | Calibration Rationale / Source |
+    | :--- | :--- | :--- | :--- |
+    | `temperature` | `0.6` | `0.7` | Optimal reasoning vs speed scaling (Unsloth specifications). Lower temperature focuses the search path for deep thinking. |
+    | `top_p` | `0.95` | `0.8` | High top-p retains alternative thinking paths; lower top-p for fast mode improves execution speed and coherence. |
+    | `top_k` | `20` | `20` | Constrains the search space to the top 20 tokens to eliminate long-tail hallucinations. |
+    | `min_p` | `0.0` | `0.0` | Disabled in favor of strict top-p/top-k filtering. |
+    | `presence_penalty` | `0.0` | `1.5` | 0.0 for natural thinking flow; 1.5 in fast mode to penalize repetition and force direct concise output. |
+    | `repetition_penalty` | `1.0` | `1.0` | Neutral scaling to prevent synthetic degradation of reasoning patterns. |
 
 ### 2.3 Virtual Context Manager Widget
 A frameless desktop overlay widget implemented in python (Tkinter) that provides real-time tracking and control over the workstation's context state.
@@ -167,3 +176,54 @@ Throughput (TPS)
 *   **Under 75,000 Tokens:** The dual RTX 5060 Ti GPUs have sufficient physical KV Cache page allocations to support parallel decoding of 4 concurrent sequences. prefix caching hit rates are high, yielding **306.79 TPS** aggregate and **0.42s TTFT**.
 *   **Over 75,000 Tokens (The Cliff):** The combined VRAM requirements of the KV Cache and model weights exceed physical VRAM under parallel execution. To prevent OOMs, the vLLM scheduler falls back to serial queueing (serving only 1 agent sequence at a time while preempting others). This drops aggregate throughput down to **32.71 TPS** (linear degradation due to serialization overhead).
 *   **Recommendation:** Use **Fast Mode (75k)** for interactive multi-agent chat sessions, and switch to **Huge Mode (110k)** only for deep codebase analysis tasks.
+
+---
+
+## 5. Workstation Repository Layout & Backup Specifics
+
+### 5.1 Repository Directory Layout
+This repository serves as the central orchestration and backup repository for the AI Workstation. The structure is organized as follows:
+
+*   **`host_configs/`**: Backup store containing core host configuration files like `hermes_config.yaml` and `opencode.json` to ensure fast disaster recovery restoration.
+*   **`vllm_sglang/`**: Custom proxy server code (`proxy.py`), benchmark scripts (`benchmark.py`), and model implementation overrides (e.g., `qwen3_5.py`, `registry.py`) mounted directly into the vLLM container.
+*   **`repositories/`**: Houses key git submodules and secondary codebases (e.g. `local-high-efficiency-rag` and `hermes-swarm`).
+*   **`hermes_swarm_data/`**: Persistent data store for swarm agent operations.
+*   **`archives/`**: Work directory containing compiled backup archives (`.tar.gz`) before being pushed to the cloud.
+
+### 5.2 Backup Sync Mechanics
+To ensure persistence of the local state without interfering with live database operations:
+
+1.  **Non-Blocking SQLite Hot Backups:** The cron/scheduler invokes `backup.sh`. The script initiates hot backups using the SQLite `.backup` command:
+    ```bash
+    sqlite3 ~/.hermes/state.db ".backup '/tmp/databases/state.db'"
+    sqlite3 ~/.hermes/agent-teams-data/monitoring.db ".backup '/tmp/databases/monitoring.db'"
+    ```
+    This eliminates file locking issues during active agent chats.
+2.  **LanceDB & Folder Rsync:** In-process vector database stores are safely synced using `rsync -a --inplace` to a staging area.
+3.  **Tarball Packaging:** Staged databases, configuration directories, and workspaces are packaged into compressed archives (`databases.tar.gz`, `configs.tar.gz`, `hermes_data.tar.gz`, `workspace.tar.gz`, `deployment.tar.gz`).
+4.  **rclone Cloud Syncing:** Uploads the generated archives to Google Drive (`google_drive:AI_Workstation_Backup/archives/`) or a mounted local Google Drive folder.
+5.  **Git Remote Synchronization:** Automated git commits and pushes are run regularly to keep the backup repositories synchronized with GitHub.
+
+### 5.3 Service Management Instructions
+The workstation services are managed using Docker Compose from the root of this repository.
+
+*   **Start the full stack:**
+    ```bash
+    docker compose up -d
+    ```
+*   **Stop the full stack:**
+    ```bash
+    docker compose down
+    ```
+*   **Restart a specific service (e.g., the proxy after code updates):**
+    ```bash
+    docker compose restart vllm-auth-proxy
+    ```
+*   **Check container status:**
+    ```bash
+    docker compose ps
+    ```
+*   **View live system logs:**
+    ```bash
+    docker compose logs -f
+    ```
