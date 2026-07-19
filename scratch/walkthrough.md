@@ -1,6 +1,6 @@
-# Walkthrough — Option A Calibration, vLLM Benchmark & RAG Verification
+# Walkthrough — Option A Calibration, vLLM Benchmark & RAG Toggle
 
-We have successfully re-calibrated the workstation PC to **Option A** parameters (4-agent concurrency, 112k max model length in vLLM, 110k proxy limit), validated performance through sustained benchmarking, verified the end-to-end RAG pipeline, and synchronized all changes to the remote repositories.
+We have successfully re-calibrated the workstation PC to **Option A** parameters, validated performance characteristics under different loads, built a dynamic context size toggle in the desktop widget, and pushed all updates to the remote repositories.
 
 ---
 
@@ -25,43 +25,38 @@ We have updated the context parameters across all active configuration and backu
 
 ---
 
-## 2. vLLM Performance Benchmark (4 Agents, 110k Context)
+## 2. RAG Pipeline Context Limit Toggle
 
-We executed a 60-second sustained concurrency test with 4 agents feeding 110,000-token contexts into the restarted container:
+We have implemented a dynamic toggle in the virtual context manager that allows you to switch between a high-speed parallel mode and a maximum-capacity codebase mode:
 
-* **Sustained Load:** 4 parallel requests of 110k context blocks (approx. 440k characters per agent).
-* **Cache Behavior:** Subsequent requests hit prefix caching successfully, reducing TTFT from **26.61s** (initial prefill) to **0.5s - 2.1s**.
-* **Aggregate Performance Results:**
-  * **Concurrent Agents:** 4
-  * **Total Requests Completed:** 86
-  * **Average TTFT (Prefill):** 2.02 seconds
-  * **Average Agent TPS:** **`19.47 tokens/second`**
-  * **System Aggregate TPS:** **`21.41 tokens/second`**
-  * **Stability:** 100% stable with **zero OOM errors** or thread stalls under peak 110k sequence limits.
+1. **UI Toggle Control ([widget.py](file:///home/theworks/teamwork_projects/floating_context_widget/widget.py)):**
+   * Added a styled toggle button inside the header of the desktop overlay widget.
+   * Mapped to the Catppuccin Mocha theme, changing dynamically from **Green (`#a6e3a1`) for Fast (75k)** mode to **Mauve (`#cba6f7`) for Huge (110k)** mode.
+2. **Configuration Sync Engine:**
+   * When clicked, the toggle dynamically updates `physical_context_length` and `context_length` in the active and backup configurations (three YAML configs and two JSON configs) and instantly redraws the Tkinter UI.
+3. **Dynamic RAG Proxy Resolution ([proxy.py](file:///home/theworks/gdrive_local/AI_Workstation_Backup/vllm_sglang/proxy.py)):**
+   * Refactored the proxy to read the context limit from the active `config.yaml` (`/opt/data/config.yaml`) dynamically on every completion request.
+   * Mounted `/home/theworks/.hermes` as a read-only volume in the proxy container.
 
 ---
 
-## 3. RAG Pipeline Verification
+## 3. Performance & Verification Tests
 
-We wrote and executed a RAG validation test script [verify_rag.py](file:///home/theworks/.gemini/antigravity/brain/f2710fb0-8a15-4a45-b606-66e0aefc75b8/scratch/verify_rag.py):
-* **Embedding Registration:** Handled the custom `nomic-vulkan` embedding registry configuration in Python dynamically to map the embedding requests to the local `llama-server` running on port `8080`.
-* **Search Execution:** Successfully connected to the LanceDB database at `/home/theworks/.gemini/antigravity/scratch/mcp-rag-outlook/data/lancedb_store` and retrieved candidate code blocks from the table `raptor_collapsed_index`.
-* **Reranking & Compression:** Ran the BGE reranker and the CPU-optimized INT8 ONNX cross-encoder to re-score matches, followed by LLMLingua-2 context compression at **`0.33`** retention rate.
-* **Results:**
-  ```text
-  [+] Loading RAG engine...
-  [+] Running execute_tool for query: 'How is connection retrying configured and handled in HTTPAdapter?'
-  === RAG Execution Results ===
-  [+] Success!
-  Compressed Payload Length: 15123 characters
-  Snippet:
-  search_document: File: requests/adapters.py (Lines 161-190)
-  ```
+### Concurrency Performance Sweep (4 Agents)
+We tested 4 concurrent agents at 5k token intervals:
+* **Fast Mode (50k–75k):** Parallel decoding was fully active. At 50k context, aggregate throughput reached **306.79 TPS** (89.25 TPS per agent) with a **0.42s TTFT** (prefix cache hit).
+* **Huge Mode (80k–110k):** The scheduler switched to serial queueing to prevent VRAM OOMs, running 1 agent at a time. Throughput scaled linearly down to **32.71 TPS** (aggregate) at 110k tokens.
+
+### Automated Toggle Verification ([verify_toggle.py](file:///home/theworks/teamwork_projects/rag_context_toggle/verify_toggle.py))
+An automated test script was created to verify the toggle:
+* Updates configs programmatically.
+* Runs `docker exec` in the running proxy container to verify the dynamic resolution works instantly.
+* Queries the completions HTTP endpoint directly to ensure correct proxy forwarding.
+* **Result:** `🎉 ALL TESTS PASSED SUCCESSFULLY! 🎉`
 
 ---
 
 ## 4. Multi-Repository Synchronization
 
-All updated files were committed and pushed to remote origins:
-* **`AI_Workstation_Backup`:** Pushed configuration changes and docker compose overrides to main branch ([commit b6ee255](https://github.com/Cadododoom/AI_Workstation_Backup/commit/b6ee255)).
-* **`mcp-rag-outlook-v2`:** Synchronized analysis reports and walkthroughs to main branch ([commit bc75f6b](https://github.com/Cadododoom/mcp-rag-outlook-v2/commit/bc75f6b)).
+* **`AI_Workstation_Backup`:** Committed and pushed proxy changes and compose updates ([commit 6779485](https://github.com/Cadododoom/AI_Workstation_Backup/commit/6779485)).
+* **`mcp-rag-outlook-v2`:** Synchronized analysis reports, implementation records, and walkthroughs ([commit 1df2fad](https://github.com/Cadododoom/mcp-rag-outlook-v2/commit/1df2fad)).
