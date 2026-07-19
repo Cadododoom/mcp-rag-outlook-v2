@@ -41,11 +41,10 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
     global _compressor, _tokenizer, _session, _db, _table
     try:
         if _db is None:
-            # 1. Connect to local disk-backed LanceDB with RaBitQ quantization
-            db_path = "./data/lancedb_store"
+            # Always prefer path relative to this file to avoid false positive empty local directories
+            db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/lancedb_store"))
             if not os.path.exists(db_path):
-                # Attempt to resolve relative to this file
-                db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/lancedb_store"))
+                db_path = "./data/lancedb_store"
             
             # Ensure the directory exists
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -141,15 +140,11 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
         top_k_docs = [item[0] for item in boosted_docs[:15]]
         
         # 3. Dynamic Bypass & Force-Keep Logic
-        # Extract force-keep documents that match capitalized entity words from the query
         force_keep_docs = []
         compress_docs = []
         
-        query_words = [w.strip("?,.:;!\"'()[]{}") for w in query.split()]
-        capitalized_words = [qw for qw in query_words if len(qw) > 4 and qw[0].isupper()]
-        
-        for doc in top_k_docs:
-            if any(cw in doc for cw in capitalized_words):
+        for idx, doc in enumerate(top_k_docs):
+            if idx < 3:
                 force_keep_docs.append(doc)
             else:
                 compress_docs.append(doc)
