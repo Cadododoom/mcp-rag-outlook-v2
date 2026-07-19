@@ -169,7 +169,36 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
                 }
             })
             
-        # Initialize PromptCompressor lazily and cache it
+        # 4. AST-Guided Mixed Compression (Signature-based Compactor)
+        from ast_compactor import compress_code
+        ast_compressed_docs = [compress_code(doc) for doc in compress_docs]
+        
+        # Combine force_keep docs and AST compressed docs
+        force_keep_text = "\n\n".join(force_keep_docs)
+        ast_text = "\n\n".join(ast_compressed_docs)
+        
+        total_ast_text = (force_keep_text + "\n\n" + ast_text).strip()
+        estimated_ast_tokens = len(total_ast_text) // 4
+        
+        # If AST compaction squeezed it enough (< 6000 tokens), bypass LLMLingua-2 entirely
+        if estimated_ast_tokens < 6000 or compression_rate >= 1.0:
+            orig_tokens = len("\n\n".join(top_k_docs)) // 4
+            comp_tokens = estimated_ast_tokens
+            if orig_tokens > 0:
+                saving_ratio_str = f"{(1.0 - comp_tokens / orig_tokens) * 100:.1f}%"
+            else:
+                saving_ratio_str = "0.0%"
+            return json.dumps({
+                "query": query,
+                "compressed_payload": total_ast_text,
+                "metadata": {
+                    "original_tokens": orig_tokens,
+                    "compressed_tokens": comp_tokens,
+                    "saving_ratio": f"{saving_ratio_str} (AST bypassed)"
+                }
+            })
+            
+        # Initialize PromptCompressor lazily and cache it as fallback
         if _compressor is None:
             _compressor = PromptCompressor(
                 model_name="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
@@ -177,16 +206,14 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
                 use_llmlingua2=True
             )
             
-        # Compress only the generic background code documents
+        # Compress the AST-compacted docs further using LLMLingua-2
         compressed_result = _compressor.compress_prompt(
-            context=compress_docs,
+            context=ast_compressed_docs,
             instruction="Analyze the system and generate the requested response.",
             question=query,
             rate=compression_rate
         )
         
-        # Combine uncompressed force-keep facts with compressed background context
-        force_keep_text = "\n\n".join(force_keep_docs)
         final_payload = force_keep_text + "\n\n" + compressed_result.get("compressed_prompt", "")
         
         force_keep_tokens = len(force_keep_text) // 4
