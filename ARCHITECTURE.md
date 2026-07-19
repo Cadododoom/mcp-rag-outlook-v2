@@ -1,4 +1,4 @@
-# Version 1.2 System Architecture and Configuration Documentation
+# Version 1.0 System Architecture and Configuration Documentation
 ## AI Workstation Backup Repository
 
 This document details the system architecture, component configurations, retrieval-augmented generation (RAG) pipeline, and performance characteristics of the Multi-Agent RAG system calibrated for the AI Workstation stack, as well as the backup layout and operational management.
@@ -107,7 +107,7 @@ The proxy acts as a reverse proxy on host port `30000`, intercepting completion 
 *   **Truncation Alert Injection:** Injecting the following warning in the last user message to instruct the model to trigger RAG instead of hallucinating:
     > `[SYSTEM WARNING]: The older conversation history has been truncated from your active memory to maintain performance. If you require details regarding previous code milestones, authentication tokens, database connection credentials, or architectural design decisions that are not visible in the recent messages above, you MUST call the 'retrieve_chat_memory' tool to search the database. Do not attempt to guess or invent these details.`
 *   **Reasoning Reassembly:** Re-constructs reasoning tokens in `<think>...</think>` tags for clients that do not support raw reasoning field streaming.
-*   **Dynamic Model Parameter Calibration (Version 1.1):** Intercepts completions requests to enforce calibrated model parameters optimized per Unsloth's official specifications for thinking/reasoning and fast/non-thinking variants:
+*   **Dynamic Model Parameter Calibration (Version 1.0):** Intercepts completions requests to enforce calibrated model parameters optimized per Unsloth's official specifications for thinking/reasoning and fast/non-thinking variants:
     | Parameter | Thinking Model (`Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4`) | Fast Model (`Cadododoom/Qwen3.6-35B-A3B-DSV4Pro-FP4-Fast`) | Calibration Rationale / Source |
     | :--- | :--- | :--- | :--- |
     | `temperature` | `0.6` | `0.7` | Optimal reasoning vs speed scaling (Unsloth specifications). Lower temperature focuses the search path for deep thinking. |
@@ -124,7 +124,7 @@ A frameless desktop overlay widget implemented in python (Tkinter) that provides
 *   **Visual Status:** Displays active panels representing current conversations, tracking physical context usage (with color-coded limits) and virtual RAG context size.
 *   **Fast/Huge Toggle Button:** A styled button mapped to the Catppuccin Mocha theme (Green `#a6e3a1` for Fast, Mauve `#cba6f7` for Huge) that updates configurations on click.
 *   **Configuration Sync:** On click, the widget programmatically writes limits to three YAML configurations (Hermes active, Hermes backup, Swarm shared backup) and two JSON configurations (OpenCode active, OpenCode backup).
-*   **Decay & Active Session Persistence (Version 1.2):** Retains running/unfinished sessions (where `ended_at IS NULL` in the database) persistently active on the overlay panel regardless of age. Completed sessions (where `ended_at` is set) are subject to a 5-minute (300 seconds) decay window from the session's completion or last activity time, after which they are automatically filtered out to prevent clutter.
+*   **Decay & Active Session Persistence (Version 1.0):** Retains running/unfinished sessions (where `ended_at IS NULL` in the database) persistently active on the overlay panel regardless of age. Completed sessions (where `ended_at` is set) are subject to a 5-minute (300 seconds) decay window from the session's completion or last activity time, after which they are automatically filtered out to prevent clutter.
 
 ---
 
