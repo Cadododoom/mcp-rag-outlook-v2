@@ -37,39 +37,169 @@ _session = None
 _db = None
 _table = None
 
+_session_queries = []
+
+def reset_session():
+    global _session_queries
+    _session_queries = []
+
+def balance_brackets(text: str) -> str:
+    stack = []
+    pairs = {')': '(', ']': '[', '}': '{'}
+    closers = {'(': ')', '[': ']', '{': '}'}
+    
+    in_single_quote = False
+    in_double_quote = False
+    in_backtick = False
+    in_line_comment = False
+    in_block_comment = False
+    
+    i = 0
+    n = len(text)
+    output = []
+    
+    while i < n:
+        c = text[i]
+        
+        if in_line_comment:
+            if c == '\n':
+                in_line_comment = False
+            output.append(c)
+            i += 1
+            continue
+        elif in_block_comment:
+            if c == '/' and i > 0 and text[i-1] == '*':
+                in_block_comment = False
+            output.append(c)
+            i += 1
+            continue
+        elif in_single_quote:
+            if c == "'" and text[i-1] != '\\':
+                in_single_quote = False
+            output.append(c)
+            i += 1
+            continue
+        elif in_double_quote:
+            if c == '"' and text[i-1] != '\\':
+                in_double_quote = False
+            output.append(c)
+            i += 1
+            continue
+        elif in_backtick:
+            if c == '`' and text[i-1] != '\\':
+                in_backtick = False
+            output.append(c)
+            i += 1
+            continue
+            
+        if c == '/' and i + 1 < n and text[i+1] == '/':
+            in_line_comment = True
+            output.append(c)
+            output.append(text[i+1])
+            i += 2
+            continue
+        elif c == '/' and i + 1 < n and text[i+1] == '*':
+            in_block_comment = True
+            output.append(c)
+            output.append(text[i+1])
+            i += 2
+            continue
+        elif c == "'":
+            in_single_quote = True
+            output.append(c)
+            i += 1
+            continue
+        elif c == '"':
+            in_double_quote = True
+            output.append(c)
+            i += 1
+            continue
+        elif c == '`':
+            in_backtick = True
+            output.append(c)
+            i += 1
+            continue
+            
+        if c in '([{':
+            stack.append(c)
+            output.append(c)
+        elif c in ')]}':
+            target = pairs[c]
+            if stack and stack[-1] == target:
+                stack.pop()
+                output.append(c)
+        else:
+            output.append(c)
+        i += 1
+        
+    while stack:
+        opener = stack.pop()
+        output.append(closers[opener])
+        
+    return "".join(output)
+
 def execute_tool(query: str, compression_rate: float = 0.33) -> str:
-    global _compressor, _tokenizer, _session, _db, _table
+    global _compressor, _tokenizer, _session, _db, _table, _session_queries
+    
+    # 1. Active Tool Loop Detection Guardrail
+    clean_query = query.strip()
+    warning_msg = ""
+    if _session_queries and _session_queries[-1] == clean_query:
+        warning_msg = "System Note: You are repeating the same RAG search query. Try widening your search or reading target file lines directly to proceed.\n\n"
+    _session_queries.append(clean_query)
+
     try:
+        try:
+            from lancedb.embeddings import get_registry
+            from lancedb.embeddings.openai import OpenAIEmbeddings
+            class NomicVulkanEmbeddings(OpenAIEmbeddings):
+                @property
+                def _ndims(self):
+                    return 768
+            get_registry().register("nomic-vulkan")(NomicVulkanEmbeddings)
+        except KeyError:
+            pass
+
         if _db is None:
-            # Always prefer path relative to this file to avoid false positive empty local directories
             db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/lancedb_store"))
             if not os.path.exists(db_path):
                 db_path = "./data/lancedb_store"
-            
-            # Ensure the directory exists
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
             _db = lancedb.connect(db_path)
         
-        # Open table
         table_name = "raptor_collapsed_index"
         if _table is None and table_name in _db.table_names():
             _table = _db.open_table(table_name)
             
+        documents_meta = []
+        documents = []
+        
         if _table is not None:
-            # Prefix query for Nomic retrieval model
             nomic_query = f"search_query: {query}"
             results = _table.search(nomic_query).limit(50).to_arrow()
-            documents = results.to_pydict().get("text", [])
+            pydict = results.to_pydict()
+            
+            raw_texts = pydict.get("text", [])
+            parent_texts = pydict.get("parent_text", [])
+            file_paths = pydict.get("file_path", [])
+            
+            for i in range(len(raw_texts)):
+                doc_text = raw_texts[i]
+                p_text = parent_texts[i] if i < len(parent_texts) else doc_text
+                f_path = file_paths[i] if i < len(file_paths) else "unknown"
+                documents_meta.append({
+                    "child_text": doc_text,
+                    "parent_text": p_text,
+                    "file_path": f_path
+                })
+                documents.append(doc_text)
         else:
-            # Fallback if table doesn't exist yet
             documents = ["No documents found. LanceDB table 'raptor_collapsed_index' is not populated yet."]
+            documents_meta = [{"child_text": documents[0], "parent_text": documents[0], "file_path": "unknown"}]
             
         if not documents:
             documents = ["No documents found in LanceDB table 'raptor_collapsed_index'."]
-
-        # 2. Re-rank retrieved candidates using CPU-optimized INT8 ONNX cross-encoder
-        # Let the OS manage core affinity to avoid thrashing 140 threads on 2 cores
-        pass
+            documents_meta = [{"child_text": documents[0], "parent_text": documents[0], "file_path": "unknown"}]
 
         # Lazy load tokenizer
         if _tokenizer is None:
@@ -95,8 +225,7 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
         
         # Scoring pipeline
         scored_docs = []
-        if len(documents) > 0 and documents != ["No documents found. LanceDB table 'raptor_collapsed_index' is not populated yet."]:
-            # Tokenize query-document pairs
+        if len(documents) > 0 and documents != ["No documents found. LanceDB table 'raptor_collapsed_index' is not populated yet."] and documents != ["No documents found in LanceDB table 'raptor_collapsed_index'."]:
             pairs = [(query, doc) for doc in documents]
             encoded = _tokenizer(
                 pairs,
@@ -105,39 +234,44 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
                 max_length=512,
                 return_tensors="np"
             )
-            
-            # Prepare inputs for ONNX session
             onnx_inputs = {
                 "input_ids": encoded["input_ids"].astype("int64"),
                 "attention_mask": encoded["attention_mask"].astype("int64")
             }
-            
-            # Run ONNX inference
             logits = _session.run(None, onnx_inputs)[0]
-            # logits shape is (batch_size, 1)
             scores = np.atleast_1d(logits.squeeze(-1)).tolist()
-            scored_docs = list(zip(documents, scores))
+            scored_docs = list(zip(range(len(documents)), scores))
         else:
-            scored_docs = [(doc, 0.0) for doc in documents]
+            scored_docs = [(i, 0.0) for i in range(len(documents))]
 
-        # Apply Lexical Term Boosting (Hybrid search helper)
+        # Apply Lexical Term Boosting
         boosted_docs = []
-        for doc, score in scored_docs:
+        for idx, score in scored_docs:
+            doc = documents[idx]
             boost = 0.0
-            # Clean and split query words
             query_words = [w.strip("?,.:;!\"'()[]{}") for w in query.split()]
             for qw in query_words:
                 if len(qw) > 4 and qw.lower() in doc.lower():
-                    # Boost exact capitalized matches (e.g. entities like AlphaCoreEngine)
                     if qw[0].isupper() and qw in doc:
                         boost += 2.0
                     else:
                         boost += 0.4
-            boosted_docs.append((doc, score + boost))
+            boosted_docs.append((idx, score + boost))
 
         # Sort documents based on boosted scores
         boosted_docs.sort(key=lambda x: x[1], reverse=True)
-        top_k_docs = [item[0] for item in boosted_docs[:15]]
+        top_k_indices = [item[0] for item in boosted_docs[:15]]
+        
+        # parent context expansion & deduplication
+        seen_parents = set()
+        top_k_docs = []
+        for idx in top_k_indices:
+            meta = documents_meta[idx]
+            p_text = meta["parent_text"]
+            f_path = meta["file_path"]
+            if p_text not in seen_parents:
+                seen_parents.add(p_text)
+                top_k_docs.append(f"// File: {f_path}\n{p_text}")
         
         # 3. Dynamic Bypass & Force-Keep Logic
         force_keep_docs = []
@@ -149,33 +283,31 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
             else:
                 compress_docs.append(doc)
                 
-        # If everything is bypassed or total estimated tokens is small, bypass compression
         total_text = "\n\n".join(top_k_docs)
         estimated_tokens = len(total_text) // 4
         
         if estimated_tokens < 2500 or not compress_docs or "AlphaCoreEngine" in query:
+            final_payload = balance_brackets(warning_msg + total_text)
             return json.dumps({
                 "query": query,
-                "compressed_payload": total_text,
+                "compressed_payload": final_payload,
                 "metadata": {
                     "original_tokens": estimated_tokens,
-                    "compressed_tokens": estimated_tokens,
+                    "compressed_tokens": len(final_payload) // 4,
                     "saving_ratio": "0.0% (bypassed)"
                 }
             })
             
-        # 4. AST-Guided Mixed Compression (Signature-based Compactor)
+        # AST-Guided Mixed Compression
         from ast_compactor import compress_code
         ast_compressed_docs = [compress_code(doc) for doc in compress_docs]
         
-        # Combine force_keep docs and AST compressed docs
         force_keep_text = "\n\n".join(force_keep_docs)
         ast_text = "\n\n".join(ast_compressed_docs)
         
         total_ast_text = (force_keep_text + "\n\n" + ast_text).strip()
         estimated_ast_tokens = len(total_ast_text) // 4
         
-        # If AST compaction squeezed it enough (< 6000 tokens), bypass LLMLingua-2 entirely
         if estimated_ast_tokens < 6000 or compression_rate >= 1.0:
             orig_tokens = len("\n\n".join(top_k_docs)) // 4
             comp_tokens = estimated_ast_tokens
@@ -183,17 +315,18 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
                 saving_ratio_str = f"{(1.0 - comp_tokens / orig_tokens) * 100:.1f}%"
             else:
                 saving_ratio_str = "0.0%"
+            final_payload = balance_brackets(warning_msg + total_ast_text)
             return json.dumps({
                 "query": query,
-                "compressed_payload": total_ast_text,
+                "compressed_payload": final_payload,
                 "metadata": {
                     "original_tokens": orig_tokens,
-                    "compressed_tokens": comp_tokens,
+                    "compressed_tokens": len(final_payload) // 4,
                     "saving_ratio": f"{saving_ratio_str} (AST bypassed)"
                 }
             })
             
-        # Initialize PromptCompressor lazily and cache it as fallback
+        # Initialize PromptCompressor lazily
         if _compressor is None:
             _compressor = PromptCompressor(
                 model_name="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
@@ -201,7 +334,6 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
                 use_llmlingua2=True
             )
             
-        # Compress the AST-compacted docs further using LLMLingua-2
         compressed_result = _compressor.compress_prompt(
             context=ast_compressed_docs,
             instruction="Analyze the system and generate the requested response.",
@@ -210,12 +342,12 @@ def execute_tool(query: str, compression_rate: float = 0.33) -> str:
         )
         
         final_payload = force_keep_text + "\n\n" + compressed_result.get("compressed_prompt", "")
+        final_payload = balance_brackets(warning_msg + final_payload)
         
         force_keep_tokens = len(force_keep_text) // 4
         orig_tokens = force_keep_tokens + compressed_result.get("origin_tokens", 0)
-        comp_tokens = force_keep_tokens + compressed_result.get("compressed_tokens", 0)
+        comp_tokens = len(final_payload) // 4
         
-        # Calculate final compression ratio
         if orig_tokens > 0:
             saving_ratio_str = f"{(1.0 - comp_tokens / orig_tokens) * 100:.1f}%"
         else:
