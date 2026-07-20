@@ -160,27 +160,41 @@ def check_and_revive():
                 reason = f"Session {session_id} ('{title}') has been idle/inactive for {elapsed:.1f} seconds"
 
         if should_revive:
-            write_log(f"ALERT: {reason}. Estimate active tokens: {token_count}. Attempting to revive/re-prompt the agent...")
-            send_notification("Hermes Watchdog", f"ALERT: Reviving session {session_id[:8]} ({token_count // 1000}k tokens)")
+            write_log(f"ALERT: {reason}. Estimate active tokens: {token_count}. Compressing session first to flush KV-cache to RAG...")
+            send_notification("Hermes Watchdog", f"ALERT: Compressing idle session {session_id[:8]} ({token_count // 1000}k tokens)")
             
-            if token_count > 75000:
-                # Context is large: Guide the agent to perform compression first
-                nudge_prompt = (
-                    f"System Watchdog Nudge: I noticed the task loop went idle and active tokens are at {token_count} "
-                    "(exceeding our 75k threshold). Please run your context compression routine first to summarize "
-                    "the conversation history, update MEMORY.md with current game status, and save reference data "
-                    "to the database. Then, continue implementing and testing the Neon Void arcade game with a compacted context."
-                )
-            else:
+            # Execute programmatic context compression to archive the session
+            python_bin = "/home/theworks/.gemini/antigravity/scratch/hermes-swarm/.venv/bin/python"
+            compress_script = "/home/theworks/teamwork_projects/neon_void_monitor/compress_session.py"
+            subprocess.call(f"{python_bin} {compress_script} {session_id}", shell=True)
+            
+            # Retrieve the newly created child continuation session ID
+            try:
+                conn_check = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+                cursor_check = conn_check.cursor()
+                cursor_check.execute("SELECT id FROM sessions WHERE parent_session_id = ? ORDER BY started_at DESC LIMIT 1;", (session_id,))
+                row_check = cursor_check.fetchone()
+                conn_check.close()
+                if row_check:
+                    child_id = row_check[0]
+                    write_log(f"FIX: Programmatic compression successful. Session rotated: {session_id} -> {child_id}")
+                    send_notification("Hermes Watchdog", f"FIX: Context compressed to RAG. Rotated to {child_id[:8]}")
+                    session_id = child_id
+            except Exception as e:
+                write_log(f"Error fetching child session ID: {e}")
+            
+            # If the original session was active (ended_at is None), resume the new child session with a nudge
+            if ended_at is None:
                 nudge_prompt = (
                     "System Watchdog Nudge: I noticed the task loop stopped or went idle. "
-                    "Please inspect the active workspace, check for any compiler/lint/runtime errors or tool loop failures, "
-                    "resolve the blocker, and continue implementing and testing the Neon Void arcade game."
+                    "I have automatically compressed the previous context to flush the KV-cache to the RAG pipeline. "
+                    "Please inspect the active workspace, resolve any blockers, and continue implementing and testing the Neon Void arcade game."
                 )
-            
-            cmd = f'nohup hermes -c -z "{nudge_prompt}" >> {nudge_log} 2>&1 &'
-            write_log(f"Executing: {cmd}")
-            subprocess.Popen(cmd, shell=True, preexec_fn=os.setsid)
+                cmd = f'nohup hermes -r {session_id} -z "{nudge_prompt}" >> {nudge_log} 2>&1 &'
+                write_log(f"Executing: {cmd}")
+                subprocess.Popen(cmd, shell=True, preexec_fn=os.setsid)
+            else:
+                write_log(f"Session was closed explicitly. Parking the session at ID {session_id} cleanly compressed.")
             
             time.sleep(60)
             
