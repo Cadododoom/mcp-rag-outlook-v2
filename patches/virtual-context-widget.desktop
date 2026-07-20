@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Virtual Context Widget
+Comment=Real-time virtual context tracking overlay for Hermes and OpenCode
+Exec=/home/theworks/teamwork_projects/floating_context_widget/widget.py
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Utility;Development;
