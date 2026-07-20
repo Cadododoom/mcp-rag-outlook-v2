@@ -131,6 +131,15 @@ def check_and_revive():
         cursor.execute("SELECT role, content, timestamp FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT 1;", (session_id,))
         last_msg = cursor.fetchone()
         
+        # Calculate active token estimate
+        cursor.execute("SELECT SUM(COALESCE(length(content), 0) + COALESCE(length(tool_calls), 0)) FROM messages WHERE session_id = ? AND active = 1;", (session_id,))
+        msg_chars = cursor.fetchone()[0] or 0
+        cursor.execute("SELECT length(system_prompt) FROM sessions WHERE id = ?;", (session_id,))
+        sys_prompt_row = cursor.fetchone()
+        sys_chars = sys_prompt_row[0] if sys_prompt_row and sys_prompt_row[0] else 0
+        
+        token_count = (msg_chars + sys_chars + 3) // 4 + 15169 # Add default tool definitions + rule buffers
+        
         conn.close()
         
         # Try to break any active read tool cache locks in the messages
@@ -151,14 +160,23 @@ def check_and_revive():
                 reason = f"Session {session_id} ('{title}') has been idle/inactive for {elapsed:.1f} seconds"
 
         if should_revive:
-            write_log(f"ALERT: {reason}. Attempting to revive/re-prompt the agent...")
-            send_notification("Hermes Watchdog", f"ALERT: Reviving idle session {session_id[:8]}")
+            write_log(f"ALERT: {reason}. Estimate active tokens: {token_count}. Attempting to revive/re-prompt the agent...")
+            send_notification("Hermes Watchdog", f"ALERT: Reviving session {session_id[:8]} ({token_count // 1000}k tokens)")
             
-            nudge_prompt = (
-                "System Watchdog Nudge: I noticed the task loop stopped or went idle. "
-                "Please inspect the active workspace, check for any compiler/lint/runtime errors or tool loop failures, "
-                "resolve the blocker, and continue implementing and testing the Neon Void arcade game."
-            )
+            if token_count > 75000:
+                # Context is large: Guide the agent to perform compression first
+                nudge_prompt = (
+                    f"System Watchdog Nudge: I noticed the task loop went idle and active tokens are at {token_count} "
+                    "(exceeding our 75k threshold). Please run your context compression routine first to summarize "
+                    "the conversation history, update MEMORY.md with current game status, and save reference data "
+                    "to the database. Then, continue implementing and testing the Neon Void arcade game with a compacted context."
+                )
+            else:
+                nudge_prompt = (
+                    "System Watchdog Nudge: I noticed the task loop stopped or went idle. "
+                    "Please inspect the active workspace, check for any compiler/lint/runtime errors or tool loop failures, "
+                    "resolve the blocker, and continue implementing and testing the Neon Void arcade game."
+                )
             
             cmd = f'nohup hermes -c -z "{nudge_prompt}" >> {nudge_log} 2>&1 &'
             write_log(f"Executing: {cmd}")
