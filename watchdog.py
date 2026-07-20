@@ -9,6 +9,15 @@ log_path = '/home/theworks/teamwork_projects/neon_void_monitor/watchdog.log'
 nudge_log = '/home/theworks/teamwork_projects/neon_void_monitor/watchdog_nudge.log'
 workspace_dir = '/home/theworks/AI_Workstation_Work/neon_void'
 
+def send_notification(title, message):
+    try:
+        env = os.environ.copy()
+        if 'DISPLAY' not in env:
+            env['DISPLAY'] = ':0.0'
+        subprocess.call(["notify-send", "-t", "5000", "-i", "dialog-information", title, message], env=env)
+    except Exception:
+        pass
+
 def write_log(message):
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
     entry = f"{timestamp} - {message}\n"
@@ -26,6 +35,7 @@ def clean_git_locks():
             if age > 60: # Older than 1 minute
                 os.remove(lock_file)
                 write_log(f"FIX: Removed stale git lock file: {lock_file} (age: {age:.1f}s)")
+                send_notification("Hermes Watchdog", "FIX: Cleared stale git lock file")
         except Exception as e:
             write_log(f"Error checking/removing git lock: {e}")
 
@@ -90,6 +100,7 @@ def reap_hung_processes():
                 if is_stale:
                     write_log(f"FIX: Killing stale background process PID {pid} (elapsed time: {etime})")
                     subprocess.call(f"kill -9 {pid}", shell=True)
+                    send_notification("Hermes Watchdog", f"FIX: Reaped stale playwright worker (PID {pid})")
     except Exception as e:
         write_log(f"Error reaping processes: {e}")
 
@@ -141,6 +152,7 @@ def check_and_revive():
 
         if should_revive:
             write_log(f"ALERT: {reason}. Attempting to revive/re-prompt the agent...")
+            send_notification("Hermes Watchdog", f"ALERT: Reviving idle session {session_id[:8]}")
             
             nudge_prompt = (
                 "System Watchdog Nudge: I noticed the task loop stopped or went idle. "
@@ -159,7 +171,7 @@ def check_and_revive():
 
 if __name__ == "__main__":
     write_log("Starting self-healing watchdog loop...")
-    duration = 86400 # 24 hours
+    duration = 259200 # 72 hours
     interval = 30    # Check every 30 seconds
     
     end_time = time.time() + duration
