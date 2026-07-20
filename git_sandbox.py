@@ -8,6 +8,13 @@ class GitSandbox:
         self.original_branch = None
 
     def _run_git(self, args):
+        lock_file = os.path.join(self.repo_path, ".git", "index.lock")
+        if os.path.exists(lock_file):
+            print(f"GitSandbox warning: Stale lock file {lock_file} detected. Cleaning up...")
+            try:
+                os.remove(lock_file)
+            except Exception as e:
+                print(f"GitSandbox error: Could not remove lock file: {e}")
         res = subprocess.run(["git"] + args, cwd=self.repo_path, capture_output=True, text=True)
         if res.returncode != 0:
             raise RuntimeError(f"Git command failed: git {' '.join(args)}\nStderr: {res.stderr}")
