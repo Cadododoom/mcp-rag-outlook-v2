@@ -1,0 +1,3 @@
+commands:
+  lint: "echo 'Linting pass!'"
+  test: "echo 'Deliberate test failure for verification' && exit 1"
